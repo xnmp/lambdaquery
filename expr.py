@@ -91,6 +91,9 @@ class Expr(object):
     def __radd__(self, other):
         return self
     
+    def __rshift__(self, func):
+        return func(self)
+    
     def getAnds(self):
         return L(self)
     
@@ -141,8 +144,9 @@ class Expr(object):
         # only used for deciding what to group by in the having
         if not self.isagg():
             return L(self)
-        return self.children.filter(lambda x: not x.isagg()) \
-             + self.children.filter(lambda x: x.isagg() and not type(x) is AggExpr).bind(Expr.havingGroups)
+        return self.children.filter(lambda x: not x.isagg() and type(x) is not ConstExpr) \
+             + self.children.filter(lambda x: x.isagg() and type(x) is not AggExpr).bind(Expr.havingGroups)
+        
     
     def modify(self, mfunc):
         reschildren = copy(self.children)
@@ -198,8 +202,10 @@ class Expr(object):
             return self
         elif oldtables and self.table not in oldtables:
             return self
-        else:
+        elif self.fieldname in self.table.columns:
             return self.table.columns[self.fieldname]
+        else:
+            return BaseExpr(self.fieldname, self.table.columns.getTables()[0])
         
 
 

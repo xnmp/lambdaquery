@@ -65,11 +65,12 @@ def canMoveOut(table, inner, outer):
     eqexprs = inner.joincond.children\
         .filter(lambda x: isinstance(x, EqExpr) 
                           and x.getTables().len() > 1
-                          and (x.children[0].table == table or x.children[1].table == table)
+                          and (x.children[0].table == table or
+                               x.children[1].table == table)
                 )
     haseqs = inner.allExprs().bind(lambda x: L(x) + x.descendants())\
-        .filter(lambda x: type(x) is BaseExpr)\
-        .filter(lambda x: x.table == table) <= AndExpr(eqexprs).descendants()
+                             .filter(lambda x: type(x) is BaseExpr)\
+                             .filter(lambda x: x.table == table) <= AndExpr(eqexprs).descendants()
     
     # we ALWAYS want it IN unless the table appears in more than one subquery, in this case it's like we're "factorizing" it
     multiple_parents = table.parents.filter(lambda x: outer in x.parents).len() > 1
@@ -105,19 +106,22 @@ def canMoveOut(table, inner, outer):
 def canMoveIn(expr, inner, outer):
     # if the tables of expr are on the inside, OR if it's joined by primary key to something whose tables are on the inside
     # ie its tables are a subset of inner's tables, plus everything that's joined by primary key to one of inner's tables
-    
-    return not expr.isagg() and expr.getTables() <= outer.joincond.children.filter(lambda x: x.isJoin()
-                                          and ((x.children[0].isPrimary() and x.children[1].table in inner.getTables())
-                                               or (x.children[1].isPrimary() and x.children[0].table in inner.getTables())
-                                               )
-                                          ).getTables() + inner.getTables() 
+    return expr.getTables() <= outer.joincond.children \
+                                    .filter(lambda x: x.isJoin()
+                                            and ((x.children[0].isPrimary() and 
+                                                  x.children[1].table in inner.getTables()) 
+                                                 or
+                                                 (x.children[1].isPrimary() and 
+                                                  x.children[0].table in inner.getTables())
+                                                 )
+                                           ).getTables() + inner.getTables() and not expr.isagg()
 
 
 def canReroute(expr, basetable, target):
     # the target is the inner query
     # if the tables of expr are a subset of the tables of the target... and not aggregate and not constant
     return basetable in expr.getTables() and expr.getTables() <= target.getTables() \
-      and type(expr) is not ConstExpr and (not expr.isagg())
+           and type(expr) is not ConstExpr and (not expr.isagg())
 
 
 def canCleanUp(self):

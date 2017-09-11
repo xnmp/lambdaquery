@@ -28,10 +28,10 @@ class Query(Table, Monad):
     #         return object.__getattribute__(self, attrname)
     
     def __add__(self, other):
-        return self.addQuery(other)
+        return addQuery(self, other)
         
     def __matmul__(self, other):
-        return self.addQuery(other)
+        return addQuery(self, other)
     
     def __radd__(self, other):
         return self
@@ -111,171 +111,6 @@ class Query(Table, Monad):
         
         return res
     
-    # def show(self, **kwargs):
-    #     print(sql.sql(self, **kwargs))
-    
-    
-    # %% ^━━━━━━━━━━━━━━━━━━━━━ THE HEAVY LIFTER ━━━━━━━━━━━━━━━━━━━━━━━^
-    
-    # def rebuild(self):
-    #     res = Query(Columns(), AndExpr())
-    #     addedtables = []
-    #     while len(res.getTables()) < len(self.getTables()):
-    #         for tab in self.getTables():
-    #             hi = Query(self.columns, AndExpr())
-                
-    #             # if not res.getTables():
-    #                 # hi.joincond = self.joincond._filter(tab0, self.getTables())
-    #             # else:
-                
-    #             hi.joincond = self.joincond._filter(tab, addedtables)
-    #             hi.joincond -= res.joincond
-    #             if len(hi.joincond.children) == 0 and addedtables:
-    #                 continue
-                
-    #             hi.columns = self.columns#.items().filter(lambda x: x[0].getTables() <= res.getTables() + tab)
-    #             hi.groupbys = self.groupbys
-                
-    #             addedtables.append(tab)
-                
-    #             res = res.addQuery2(hi, self)
-        
-    #     return self
-    
-        
-    # def addQuery2(self, other, parent):
-        
-    #     tables0, tables1 = self.joincond.getTables(), other.joincond.getTables()
-    #     jtables = tables0 & tables1
-    #     res, othercopy = copy(self), other
-        
-    #     for tab1 in tables1:
-    #         cond1 = othercopy.joincond._filter(tab1, jtables)
-    #         skiptable = False
-    #         for tab0 in tables0.filter(lambda x: x.__dict__ == tab1.__dict__):                
-    #             cond0 = res.joincond._filter(tab0, jtables)
-                
-                
-    #             if cond1.setSource(Expr.table, tab1) <= cond0.setSource(Expr.table, tab0):
-    #                 if tab1 is not tab0:
-                        
-    #                     other.setSource(tab0, oldtable=tab1)
-    #                     parent.setSource(tab0, oldtable=tab1)
-    #                 skiptable = True
-    #         if not skiptable:
-    #             jtables += L(tab1)
-    #             res.joincond &= cond1
-        
-    #     res.columns %= othercopy.columns
-    #     res.groupbys += othercopy.groupbys
-    #     return res
-    
-    def addQuery(self, other):
-        # THIS IS THE MOST CRUCIAL PART OF THE WHOLE LIBRARY
-        # ONLY a query -> query, if you want to add anything else turn it into a query first
-        # the crucial thing to make it work it that you need to mutate "other", 
-        # It's actually the ONE thing you actually want to mutate
-        
-        res, othercopy = copy(self), copy(other)
-        
-        # hi = res.columns.getSaved().filter(lambda x: x.getTables()[0] in other.joincond.getTables())
-        # res.joincond &= hi.fold(Columns.__and__, mzero=Columns()).joincond
-        
-        # tables0, tables1 = self.joincond.getTables(), other.joincond.getTables()
-        # jtables = tables0 & tables1
-        
-        # # # def canJoin(tab1, jc0, jc1):    
-        # # #     for tab0 in jc0.getTables().filter(lambda x: x.__dict__ == tab1.__dict__):                
-        # # #         orcond = jc0.setSource(Expr.table, tab0) | jc1.setSource(Expr.table, tab1)
-        # # #         eqtables = orcond.children.filter(Expr.isJoin).getTables()
-        # # #         if (Expr.table in eqtables and eqtables.len() > 1):
-        # # #             return False
-        # # #     return True
-        
-        # for tab1 in tables1:
-        #     skiptable = False
-        #     cond1 = other.joincond._filter(tab1, jtables)
-            
-        #     # if canJoin(tab1, res.joincond, other.joincond):
-        #     #     res.joincond &= cond1
-        #     # else:
-        #     #     other.setSource(tab0, tab1)
-        #     #     res.setSource(tab0, tab1)
-                
-        #     #     leftover0 = res.joincond - other.joincond, 
-        #     #     leftover1 = other.joincond - res.joincond
-                
-        #     #     @baseFunc
-        #     #     def ljFilter(expr, cond):
-        #     #         return Expr._ifen_(expr, cond) if expr.table == tab0 else expr
-                
-        #     #     if tab0.leftjoin and leftover0.children:
-        #     #         res.modify(lambda x: ljFilter(x, leftover0), 'columns')
-        #     #         # trial using a lens
-        #     #         res >>= lens.joincond.children.modify(lambda x: x - leftover0)
-                
-        #     #     if tab1.leftjoin and leftover1.children:
-        #     #         other.modify(lambda x: ljFilter(x, leftover1), 'columns')
-                
-            
-            
-            
-            
-        #     for tab0 in tables0.filter(lambda x: x.__dict__ == tab1.__dict__):
-        #         cond0 = res.joincond._filter(tab0, jtables)
-        #         mcond0 = cond0.setSource(Expr.table, tab0)
-        #         mcond1 = cond1.setSource(Expr.table, tab1)
-        #         leftover0, leftover1 = mcond0 - mcond1, mcond1 - mcond0
-        #         orcond = mcond0 | mcond1
-                
-        #         # tab1 and tab0 are both joined to the same table by the same thing
-        #         # eqtables = orcond.children.filter(Expr.isJoin).getTables()
-        #         # if not (Expr.table in eqtables and eqtables.len() > 1): continue
-        #         # if (leftover0.children or tab0.leftjoin) and (leftover1.children or tab1.leftjoin): continue
-        #         if leftover0.children or leftover1.children: continue
-                
-        #         # if "user" in tab1.tablename:
-                    
-                
-        #         skiptable = True
-                
-        #         if tab1 is not tab0:
-                    
-        #             other.setSource(tab0, tab1)
-        #             res.setSource(tab0, tab1)
-                
-        #         # note that either both are inner joined or both are left joined
-        #         # if left join, subtract the joinconds and add remainders to case whens at the top
-        #         # @baseFunc
-        #         # def ljFilter(expr, cond):
-        #         #     return Expr._ifen_(expr, cond) if expr.table == tab0 else expr
-                
-        #         # if tab0.leftjoin and leftover0.children:
-                    
-        #         #     leftover0 = leftover0.setSource(tab0, Expr.table)
-        #         #     res.modify(lambda x: ljFilter(x, leftover0), 'columns')
-        #         #     # trial using a lens
-        #         #     res >>= lens.joincond.children.modify(lambda x: x - leftover0)
-                
-        #         # if tab1.leftjoin and leftover1.children:
-                    
-        #         #     leftover1 = leftover1.setSource(tab0, Expr.table)
-        #         #     other.modify(lambda x: ljFilter(x, leftover1), 'columns')
-        #         #     cond1.children -= leftover1
-                
-        #     if not skiptable:
-        #         jtables += L(tab1)
-        #         res.joincond &= cond1
-        
-        
-        #this is if we want it to be completely no frills, but bug free
-        res.joincond &= other.joincond 
-        
-        res.columns %= other.columns
-        res.groupbys += other.groupbys
-        return res
-    
-    
     
     # %% ^━━━━━━━━━━━━━━ PUBLIC FUNCTIONS ━━━━━━━━━━━━━━━^
         
@@ -309,17 +144,16 @@ class Query(Table, Monad):
     
     
     def sort(self, *args):
-        res = copy(self)
-        res.ordervar += L(*args)
-        return res
-        # return lens.ordervar.modify(lambda x: x + L(*args))(self)
+        # res = copy(self)
+        # res.ordervar += L(*args)
+        # return res
+        return lens.ordervar.modify(lambda x: x + L(*args))(self)
     
     
     def limit(self, n=50):
-        res = copy(self)
-        res.limitvar = n
-        return res
-        # return lens.limitvar.set(n)(self)
+        # res = copy(self)
+        # res.limitvar = n
+        return lens.limitvar.set(n)(self)
     
     
     def fmap(self, ffunc, *args, **kwargs):
@@ -365,19 +199,12 @@ class Query(Table, Monad):
         # a = args[0].asQuery()
         # b = args[1].asQuery()
         # hh = a + b
-        
-        inargs = L(*kwargs.items()).fmap(lambda x: x[1].label(x[0]))
-        
+        inargs = L(*kwargs.items()).fmap(lambda x: x[1].label(x[0]))        
         res = L(*args, *inargs).fmap(lambda x: x.asQuery()).sum()
         if filter is not None:
             res = res.filter(filter)
         # assert res.columns.
         # res.joinM()
-        
-        
-        
-        
-        
         return res
     
     
@@ -413,3 +240,109 @@ class Query(Table, Monad):
             tab.leftjoin = True
         res.modify(lambda x: x.setWhere(False), 'joincond')
         return res
+
+
+
+# %% ^━━━━━━━━━━━━━━━━━━━━━ THE HEAVY LIFTER ━━━━━━━━━━━━━━━━━━━━━━━^
+    
+def addQuery(self, other):
+    # THIS IS THE MOST CRUCIAL PART OF THE WHOLE LIBRARY
+    # ONLY a query -> query, if you want to add anything else turn it into a query first
+    # the crucial thing to make it work it that you need to mutate "other", 
+    # It's actually the ONE thing you actually want to mutate
+    
+    res, othercopy = copy(self), copy(other)
+    
+    # hi = res.columns.getSaved().filter(lambda x: x.getTables()[0] in other.joincond.getTables())
+    # res.joincond &= hi.fold(Columns.__and__, mzero=Columns()).joincond
+    
+    tables0, tables1 = self.joincond.getTables(), other.joincond.getTables()
+    jtables = tables0 & tables1
+    
+    for tab1 in tables1:
+        skiptable = False
+        cond1 = other.joincond._filter(tab1, jtables)
+        
+        
+        for tab0 in tables0.filter(lambda x: x.__dict__ == tab1.__dict__):
+            
+            cond0 = res.joincond._filter(tab0, jtables)
+            # mcond0 = cond0.setSource(Expr.table, tab0)
+            # mcond1 = cond1.setSource(Expr.table, tab1)
+            
+            # leftover0, leftover1 = mcond0 - mcond1, mcond1 - mcond0
+            # orcond = mcond0 | mcond1
+            
+            if not identifyTable(cond0, cond1, tab0, tab1): continue
+            
+            if tab1 is not tab0:
+                other.setSource(tab0, tab1)
+                res.setSource(tab0, tab1)
+                moveJoins(cond0, cond1, tab0, tab1, res, other)
+                skiptable = True
+            else:
+                # TODO: something should go here but not sure what
+                pass
+                
+        if not skiptable:
+            jtables += L(tab1)
+            res.joincond &= cond1
+    
+    #this is if we want it to be completely no frills, but bug free
+    # res.joincond &= other.joincond 
+    
+    res.columns %= other.columns
+    res.groupbys += other.groupbys
+    return res
+
+
+def identifyTable(cond0, cond1, tab0, tab1):
+        # mcond0 = cond0.setSource(Expr.table, tab0)
+        # mcond1 = cond1.setSource(Expr.table, tab1)
+        # leftover0, leftover1 = mcond0 - mcond1, mcond1 - mcond0
+        # orcond = mcond0 | mcond1
+        
+        # tab1 and tab0 are both joined to the same table by the same thing
+        # eqtables = orcond.children.filter(Expr.isJoin).getTables()
+        # if not (Expr.table in eqtables and eqtables.len() > 1): continue
+        # if (leftover0.children or tab0.leftjoin) and (leftover1.children or tab1.leftjoin): continue
+                
+        andcond = cond0 & cond1
+        
+        # orcond.baseExprs().filter(lambda x: x.table in (tab0, tab1)).groupby(lambda x: x.fieldname).filter(lambda x: x.value.len() > 1).fmap(lambda x: x.value)
+        # print(orcond)
+        
+        # hi0 = andcond.baseExprs().filter(lambda x: x.table == tab0)
+        # hi1 = andcond.baseExprs().filter(lambda x: x.table == tab1)
+        # if 'milestone' in tab0.tablename and tab1 is not tab0:
+        
+        for expr0 in andcond.baseExprs().filter(lambda x: x.table == tab0):
+            for expr1 in andcond.baseExprs().filter(lambda x: x.table == tab1):
+                if expr0.fieldname == expr1.fieldname:
+                    if expr0.getEqs(andcond) ^ expr1.getEqs(andcond):      
+                        return True
+        return False
+        # return not leftover0.children.exists() and not leftover1.children.exists()
+
+
+def moveJoins(cond0, cond1, tab0, tab1, res, other):
+    # MUTATES
+    # given two conditions, replace the tables, or them, and add the joinconds to tab0 and tab1
+    # subtract the joinconds and add remainders to case whens in the selects
+    
+    cond1 = cond1.setSource(tab0, tab1)
+    leftover1 = cond1 - cond0
+    leftover0 = cond0 - cond1
+    
+    @baseFunc
+    def addJoins(expr, cond):
+         return Expr._ifen_(expr, cond) if expr.table == tab0 else expr
+    
+    if leftover0.children:
+        res.modify(lambda x: addJoins(x, leftover0), 'columns')
+        res.joincond >>= lens.children.modify(lambda x: x - leftover0.children)
+    
+    if leftover1.children:
+        other.modify(lambda x: addJoins(x, leftover1), 'columns')
+        other.joincond >>= lens.children.modify(lambda x: x - leftover1.children)
+        # other >>= lens.columns.modify(lambda x: x - leftover0.children)

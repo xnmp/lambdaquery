@@ -127,12 +127,12 @@ class L(list):
     def len(self):
         return len(self)
         
-    def fold(self, ffunc, mzero=None):
+    def fold(self, ffunc=None, mzero=None, meth=None):
         if not self:
             print("Empty Fold")
-            return mzero
-        res = self[0]
-        for el in self[1:]:
+        res = mzero if mzero else self[0]
+        ffunc = ffunc if ffunc is not None else getattr(mzero.__class__, meth)
+        for el in self:
             res = ffunc(res, el)
         return res
     

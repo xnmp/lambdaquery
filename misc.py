@@ -1,6 +1,11 @@
 from copy import copy, deepcopy
 from datetime import timedelta
 from lenses import lens
+from functools import reduce
+import datetime as dt
+import pandas as pd
+import numpy as np
+
 
 def base10toN(num,n=36):
     """Change a  to a base-n number.
@@ -45,7 +50,6 @@ def listintersection(l1,l2):
 
 # %% ^━━━━━━━━━━━━━━━━━ SUBJECT TO CHANGE ━━━━━━━━━━━━━━━━━━━━━━^
 
-
 class KV(object):
     def __init__(self, key, value):
         self.key = key
@@ -80,20 +84,18 @@ class L(list):
         return not bool(self - other)
     
     def __radd__(self, other):
+        res = copy(self)
         if hasattr(other, '__iter__'):
-            res = copy(self)
             for el in other:
                 res += el
-            return res
-        else:
-            return self
+        return res
     
     def __iadd__(self, other):
+        # can't remember what this is for
         return NotImplemented
     
     def __repr__(self):
-        res = list.__repr__(self)
-        return f'L<{res[1:-1]}>'
+        return f'L<{list.__repr__(self)[1:-1]}>'
     
     def __rshift__(self, func):
         return func(self)
@@ -147,7 +149,6 @@ class L(list):
     
     def groupby(self, gpbyfunc):
         res = {}
-        
         for el in self:
             dummylabel = str(gpbyfunc(el))
             if dummylabel in res:

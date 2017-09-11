@@ -30,10 +30,8 @@ class Query(Table, Monad):
     def __add__(self, other):
         return self.addQuery(other)
         
-    
     def __matmul__(self, other):
         return self.addQuery(other)
-    
     
     def __radd__(self, other):
         return self
@@ -42,8 +40,7 @@ class Query(Table, Monad):
         return self.groupbys.fmap(lambda x: x.fieldname)
     
     def modify(self, mfunc, *args):
-        # note that this isn't quite the same as fmap
-        # lenses would be super useful here...
+        # note that this isn't the same as fmap
         
         if 'joincond' in args or not args:
             sjoincond = copy(self.joincond)
@@ -60,8 +57,7 @@ class Query(Table, Monad):
             sgroupbys.modify(mfunc)
             self.groupbys = sgroupbys
             # self.groupbys >>= lens.modify(mfunc)
-    
-    
+            
         # self.joincond.modify(mfunc)
         # self.columns.modify(mfunc)
         # self.groupbys.modify(mfunc)
@@ -74,11 +70,11 @@ class Query(Table, Monad):
             setattr(res, attrname, attr)
         return res
     
-    def clearCols(self):
-        res = copy(self)
-        res.columns = self.columns.clear()
-        return res
-        # return lens.columns.modify(Columns.clear)(self)
+    # def clearCols(self):
+    #     # res = copy(self)
+    #     # res.columns = self.columns.clear()
+    #     # return res        
+    #     return lens.columns.modify(Columns.clear)(self)
     
     @property
     def tablename(self):
@@ -104,10 +100,7 @@ class Query(Table, Monad):
     
     def joinM(self):
         res = copy(self)
-        
         newjcs = res.columns.joincond
-        
-        
         res.columns = self.columns.clear()
         res += self.columns.asQuery()
         
@@ -116,8 +109,6 @@ class Query(Table, Monad):
         #     if key not in self.columns.keys():
         #         del res.columns[key]
         
-        # self.joincond += self.columns.joincond
-        # self.groupbys += self.columns.groupbys
         return res
     
     # def show(self, **kwargs):
@@ -190,16 +181,16 @@ class Query(Table, Monad):
         # hi = res.columns.getSaved().filter(lambda x: x.getTables()[0] in other.joincond.getTables())
         # res.joincond &= hi.fold(Columns.__and__, mzero=Columns()).joincond
         
-        tables0, tables1 = self.joincond.getTables(), other.joincond.getTables()
-        jtables = tables0 & tables1
+        # tables0, tables1 = self.joincond.getTables(), other.joincond.getTables()
+        # jtables = tables0 & tables1
         
-        # def canJoin(tab1, jc0, jc1):    
-        #     for tab0 in jc0.getTables().filter(lambda x: x.__dict__ == tab1.__dict__):                
-        #         orcond = jc0.setSource(Expr.table, tab0) | jc1.setSource(Expr.table, tab1)
-        #         eqtables = orcond.children.filter(Expr.isJoin).getTables()
-        #         if (Expr.table in eqtables and eqtables.len() > 1):
-        #             return False
-        #     return True
+        # # # def canJoin(tab1, jc0, jc1):    
+        # # #     for tab0 in jc0.getTables().filter(lambda x: x.__dict__ == tab1.__dict__):                
+        # # #         orcond = jc0.setSource(Expr.table, tab0) | jc1.setSource(Expr.table, tab1)
+        # # #         eqtables = orcond.children.filter(Expr.isJoin).getTables()
+        # # #         if (Expr.table in eqtables and eqtables.len() > 1):
+        # # #             return False
+        # # #     return True
         
         # for tab1 in tables1:
         #     skiptable = False
@@ -276,20 +267,20 @@ class Query(Table, Monad):
         #         jtables += L(tab1)
         #         res.joincond &= cond1
         
-        res.joincond &= other.joincond #this is if we want it to be completely no frills, but bug free
+        
+        #this is if we want it to be completely no frills, but bug free
+        res.joincond &= other.joincond 
+        
         res.columns %= other.columns
         res.groupbys += other.groupbys
         return res
     
     
     
-    
     # %% ^━━━━━━━━━━━━━━ PUBLIC FUNCTIONS ━━━━━━━━━━━━━━━^
         
     def aggregate(self, aggfunc=None, iswindow=False, existsq=False, lj=True, distinct=False):
-        
-        
-        
+        # Aggregate a query into a single row
         if aggfunc is not None:
             return self.fmap(aggfunc).aggregate()
         res = Columns()
@@ -309,7 +300,7 @@ class Query(Table, Monad):
         else:
             for key, expr in res.items():
                 res[key] = BaseExpr(expr.fieldname, self)
-                self.columns = Columns({None: BaseExpr('*', self.columns.getTables()[0])})
+                self.columns = BaseExpr('*', self.columns.getTables()[0]).asCols()
         return Query.unit(res)
     
     
@@ -339,7 +330,6 @@ class Query(Table, Monad):
     
     
     def exists(self):
-        
         return self.lj().asCols().firstCol().notnull_()
     
     
@@ -353,7 +343,6 @@ class Query(Table, Monad):
     
         
     def bind(self, bfunc):
-        
         res = copy(self)#.joinM()
         # hi = bfunc(self.columns)
         assert not res.columns.joincond.children
@@ -363,20 +352,19 @@ class Query(Table, Monad):
         if qnew.columns.keys():
             res.columns = qnew.columns
         res.groupbys += self.columns.primary().values() + qnew.groupbys
-        
         return res.joinM()
     
-    def isDerived(self):
-        self.joincond.getJoins()
-        self.columns.getForeign()
+    
+    # def isDerived(self):
+    #     self.joincond.getJoins()
+    #     self.columns.getForeign()
+    
     
     @classmethod
     def unit(cls, *args, filter=None, **kwargs,):
         # a = args[0].asQuery()
         # b = args[1].asQuery()
         # hh = a + b
-        
-            
         
         res = L(*args).fmap(lambda x: x.asQuery()).sum()
         if filter is not None:
@@ -403,14 +391,14 @@ class Query(Table, Monad):
         res.joincond += newconds.joincond
         return res.joinM()
     
+    
     # def joinOn(self, cond=None):
     #     return self.filter
     
     
     def lj(self):
-        # it should just make it so that the groupbys get left joined
+        # a question: should subqueries be left joined?
         res = copy(self)
-        
         # res.leftjoin = True
         # for tab in res.groupbys.getTables()[1:]:
         #     tab.leftjoin = True

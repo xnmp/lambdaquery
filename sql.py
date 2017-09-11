@@ -60,16 +60,13 @@ def sql(self, display=True, reduce=True, subquery=False):
     # if self.isagg():
         # groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg()).len() + 1))
     #     if subquery or not groupbys:
-    #         groupbys += self.groupbys.filter(lambda x: x not in exprs)
+    #         groupbys += (self.groupbys + havings.bind(Expr.baseExprs)).filter(lambda x: x not in exprs)
     #     res += '\n\nGROUP BY ' + groupbys.intersperse(', ')
-    groupbys = self.groupbys + havings.bind(Expr.baseExprs)
+    groupbys = self.groupbys + havings.bind(Expr.nonAggBaseExprs)
     res += f'\n{lastSeparator(res)}GROUP BY ' + groupbys.intersperse(', ')
     
     # ==HAVING...
-    if havings: 
-        import pdb; pdb.set_trace()  # breakpoint bf262ac7 //
-        
-        res += f'\nHAVING ' + havings.intersperse('\n    AND')
+    if havings: res += f'\nHAVING ' + havings.intersperse('\n    AND')
     
     # ==ORDER BY / LIMIT...
     if self.ordervar: res += f'\nORDER BY ' + self.ordervar.intersperse(', ')

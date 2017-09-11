@@ -137,6 +137,13 @@ class Expr(object):
     def nonAggBaseExprs(self):
         return self.nonAggDescendants().filter(lambda x: type(x) is BaseExpr)
     
+    def havingGroups(self):
+        # only used for deciding what to group by in the having
+        if not self.isagg():
+            return L(self)
+        return self.children.filter(lambda x: not x.isagg()) \
+             + self.children.filter(lambda x: x.isagg() and not type(x) is AggExpr).bind(Expr.havingGroups)
+    
     def modify(self, mfunc):
         reschildren = copy(self.children)
         reschildren.modify(mfunc)
@@ -527,10 +534,15 @@ class Columns(dict):
     
     def label(self, newname):
         # MUTATES
+        multiple = False
         if len(self) > 1:
-            raise AttributeError("Columns must have one column only to label")
-        expr = self.asExpr()
-        del self[self.keys()[0]]
-        self[newname] = expr
+            multiple = True
+            # raise AttributeError("Columns must have one column only to label")
+        for key, expr in self.items():
+            del self[key]
+            if multiple: 
+                self[newname + '_' + key] = expr
+            else:
+                self[newname] = expr
         return self
 

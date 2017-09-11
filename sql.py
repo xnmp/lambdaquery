@@ -15,6 +15,8 @@ def sql(self, display=True, reduce=True, subquery=False):
     if type(self) is Table: return str(self)
     if reduce: reduceQuery(self)
     
+    # if not subquery and reduce: relabel(self)
+    
     alltables = self.getTables()
     fulltables = alltables.filter(lambda x: not x.leftjoin)
     ljtables = alltables.filter(lambda x: x.leftjoin)
@@ -62,7 +64,7 @@ def sql(self, display=True, reduce=True, subquery=False):
     #     if subquery or not groupbys:
     #         groupbys += (self.groupbys + havings.bind(Expr.baseExprs)).filter(lambda x: x not in exprs)
     #     res += '\n\nGROUP BY ' + groupbys.intersperse(', ')
-    groupbys = self.groupbys + havings.bind(Expr.nonAggBaseExprs)
+    groupbys = self.groupbys + havings.bind(Expr.havingGroups)
     res += f'\n{lastSeparator(res)}GROUP BY ' + groupbys.intersperse(', ')
     
     # ==HAVING...

@@ -398,3 +398,11 @@ def reduceQuery(self):
     print("FINISHED REDUCING")
     print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
 
+
+
+# def relabel(self, tag=0):
+#     for tablegroup in self.getTables().groupby(lambda x: x.tablename):
+        
+#         for i, tab in tablegroup.value.enumerate():
+#             tab.alias += str(i)#str(tag) + str(i)
+#             # relabel(tab, tag = tag + 1)

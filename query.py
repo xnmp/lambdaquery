@@ -361,16 +361,23 @@ class Query(Table, Monad):
     
     
     @classmethod
-    def unit(cls, *args, filter=None, **kwargs,):
+    def unit(cls, *args, filter=None, **kwargs):
         # a = args[0].asQuery()
         # b = args[1].asQuery()
         # hh = a + b
         
-        res = L(*args).fmap(lambda x: x.asQuery()).sum()
+        inargs = L(*kwargs.items()).fmap(lambda x: x[1].label(x[0]))
+        
+        res = L(*args, *inargs).fmap(lambda x: x.asQuery()).sum()
         if filter is not None:
             res = res.filter(filter)
         # assert res.columns.
         # res.joinM()
+        
+        
+        
+        
+        
         return res
     
     

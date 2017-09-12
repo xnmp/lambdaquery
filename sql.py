@@ -2,35 +2,13 @@ from reroute import *
 
 
 def tableGen(self):
-    pass
-
-
-def lastSeparator(self):
-    return '\n' if len(self.split('\n  ')[-1]) > 200 else ''
-
-
-def sql(self, display=True, reduce=True, subquery=False):
-    
-    # self = deepcopy(self)
-    if type(self) is Table: return str(self)
-    if reduce: reduceQuery(self)
-        
-    # if not subquery and reduce: relabel(self)
     
     alltables = self.getTables()
     fulltables = alltables.filter(lambda x: not x.leftjoin)
     ljtables = alltables.filter(lambda x: x.leftjoin)
     
-    remainingcond, addedtables, wheres, havings = copy(self.joincond), L(), L(), L()
-    selects = self.columns.items().sort(lambda x: x[1].isagg())
-    exprs = selects.fmap(lambda x: x[1])
+    res, remainingcond, addedtables, wheres, havings = '', copy(self.joincond), L(), L(), L()
     
-    # ==SELECT...
-    showSql = lambda p: str(p[1]) + (f' AS {p[0]}' if p[0] is not None else '')
-    selecttype1 = '' if self.isagg() else 'DISTINCT '
-    res = f'SELECT {selecttype1}\n  ' + selects.fmap(showSql).intersperse(', \n  ')
-    
-    # ==FROM...
     while len(addedtables) < len(alltables):
         for table in fulltables + ljtables - addedtables:
             
@@ -54,6 +32,33 @@ def sql(self, display=True, reduce=True, subquery=False):
             
             remainingcond.children -= joins + wheres + havings
             addedtables.append(table)
+    
+    return res, wheres, havings
+
+
+def lastSeparator(self):
+    return '\n' if len(self.split('\n  ')[-1]) > 200 else ''
+
+
+def sql(self, display=True, reduce=True, subquery=False):
+    
+    # self = deepcopy(self)
+    if type(self) is Table: return str(self)
+    if reduce: reduceQuery(self)
+        
+    # if not subquery and reduce: relabel(self)
+    
+    selects = self.columns.items().sort(lambda x: x[1].isagg())
+    exprs = selects.fmap(lambda x: x[1])
+    
+    # ==SELECT...
+    showSql = lambda p: str(p[1]) + (f' AS {p[0]}' if p[0] is not None else '')
+    selecttype1 = '' if self.isagg() else 'DISTINCT '
+    res = f'SELECT {selecttype1}\n  ' + selects.fmap(showSql).intersperse(', \n  ')
+    
+    # FROM..self
+    joinstr, wheres, havings = tableGen(self)
+    res += joinstr
             
     # ==WHERE...
     if wheres: res += f'\n{lastSeparator(res)}WHERE ' + wheres.intersperse('\n    AND ')

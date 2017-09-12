@@ -22,10 +22,20 @@ class Table(object):
     def __init__(self, tablename, alias, tableclass=None, instance=None):
         self.tablename = tablename
         self.alias = alias
+        
+        # misc data for rerouting purposes
         self.tableclass = tableclass
+        # self.instance = instance
         
     def __repr__(self):
         return self.tablename + " AS " + self.abbrev
+    
+    # def __eq__(self, other):
+    #     copy1 = copy(self).__dict__
+    #     copy2 = copy(other).__dict__
+    #     del copy1['instance']
+    #     del copy2['instance']
+    #     return copy1 == copy2
     
     @property
     def abbrev(self):
@@ -48,7 +58,8 @@ class Table(object):
         return lens(self).leftjoin.set(True)
     
     def primarynames(self):
-        return self.tableclass().primary().values().fmap(lambda x: x.fieldname)
+        return self.tableclass().groupbys.fmap(lambda x: x.fieldname)
+        # return self.tableclass().groupbys[0].fieldname
 
 
 def baseFunc(exprfunc):
@@ -58,7 +69,7 @@ def baseFunc(exprfunc):
             return exprfunc(expr, *args, **kwargs)
         return expr.fmap(lambda x: modfunc(x, *args, **kwargs))
     return modfunc
-    
+
 
 class Expr(object):
     
@@ -115,6 +126,10 @@ class Expr(object):
     def isPrimary(self):
         return type(self) is BaseExpr and self.table.primarynames()[0] == self.fieldname
     
+    def getPrimary(self):
+        self.table.primarynames()
+        return Columns({self.table.primarynames()[0] == self.fieldname})
+    
     def getTables(self):
         return self.children.getTables()
     
@@ -146,7 +161,6 @@ class Expr(object):
             return L(self)
         return self.children.filter(lambda x: not x.isagg() and type(x) is not ConstExpr) \
              + self.children.filter(lambda x: x.isagg() and type(x) is not AggExpr).bind(Expr.havingGroups)
-        
     
     def modify(self, mfunc):
         reschildren = copy(self.children)
@@ -233,23 +247,31 @@ class AndExpr(Expr):
     
     def __init__(self, exprs=L()):
         self.children = exprs.bind(lambda x: x.getAnds())
+    
     def __repr__(self):
         if not self.children:
             return "EmptyAndExpr" #or TRUE
         else:
             return " AND ".join(self.children.fmap(repr))
+    
+    # def __repr__(self):
+    #     return f"AndExpr({self})"
+    
     def getAnds(self):
         return self.children
+    
     def _filter(self, basetable, extratables=L()):
-        return AndExpr(self.children.filter(lambda x: not (x.getTables() - L(basetable) - L(*extratables))))
+        return AndExpr(self.children.filter(lambda x: basetable in x.getTables() and not (x.getTables() - L(basetable) - L(*extratables))))
+    
     def __le__(self, other):
         return self.children <= other.children
+    
     def setWhere(self):
         # MUTATES
         for expr in self.children:
             expr.iswhere = True
         return self
-        # return lens.children.each_().iswhere.set(True)(self)
+        # return lens.children.each_().iswhere.set(True)(self) # doesn't work since each_() will return a list not an L()
         
     def groupEq(self):
         # DO NOT USE: this is mutating somehow
@@ -290,14 +312,12 @@ class BinOpExpr(FuncExpr):
         func.__name__ = opname
         super(BinOpExpr, self).__init__(func, expr1, expr2)
     def __eq__(self, other):
-        # THIS IS THE FUCKING RANDOMNESS I INTRODUCED
+        # reminder: I introduced randomness here by using memloc
         if self.func.__name__ in ['='] and isinstance(other, BinOpExpr):
             return self.func.__name__ == other.func.__name__ \
                 and self.children.sort(lambda x: str(x)) == other.children.sort(lambda x: str(x))
         else:
             return self.__dict__ == other.__dict__
-        # else:
-            # return object.__eq__(self, other)
 
 
 class EqExpr(BinOpExpr):
@@ -341,32 +361,45 @@ class Columns(dict):
     
     joincond = AndExpr()
     groupbys = L()
+    # primary = None
     
     def __init__(self, *args, **kwargs):
-        # don't update the joinconds, the only place where Columns are manually instantiated is the unit function
+        # don't update the joinconds, the only place where Columns itself is manually instantiated is the unit function
         dict.__init__(self)
         for col in args:
-            updateUnique(self, col)    
+            updateUnique(self, col)
     
     def __getattr__(self, attrname):
+        # if attrname == 'and_lt_ts_gt_ts_sub_ts':
+            # pass            
+        
         if attrname in self:
             res = Columns({attrname: self[attrname]})
             res.joincond = self.joincond
             res.groupbys = self.groupbys
-            res.primary = self.primary
+            
+            for key, derived in L(*self.__dict__).filter(lambda x: '_saved' in x[0]):
+                res[key] = derived
+            
+            # def primary_getattr():
+                # return self.primary()
+            # res.primary = self.primary
             return res
         return object.__getattribute__(self, attrname)
     
     def __repr__(self):
         if not self.joincond.children and not self.groupbys:
-            return dict.__repr__(self)
-        return f'Columns(dict= {dict.__repr__(self)}, joincond= {self.joincond}, groupbys= {self.groupbys})'
+            return dict.__repr__(self) #+ f"|primary(), {self.primary.values()}"
+        return f'Columns(dict= {dict.__repr__(self)}, joincond= {self.joincond}, groupbys= {self.groupbys})'#, primary= {self.primary})'
     
     def __mod__(self, other):
         return updateUnique(self, other, makecopy=True)
     
     def __matmul__(self, other):
         return (self.asQuery() @ other.asQuery()).asCols()
+    
+    def __rshift__(self, func):
+        return func(self)
     
     # def joinM(self):
     #     res = copy(self)
@@ -410,22 +443,35 @@ class Columns(dict):
     @classmethod
     def queryAll(cls, cond=None, gbpy=True):
         newinstance = cls()
-        res = newinstance.asQuery().filter(cond)
-        # if the joincond doesn't contain an actual joincond that was filtered for specifically
-        if not res.joincond.getJoins().filter(lambda x: not x.iswhere):
-            res.groupbys += newinstance.primary().values()
-        return res
+        # res = newinstance.asQuery().filter(cond).groupby(newinstance.primary.values())
+        
+        # if the joincond contains a joincond, it's derived and so we must get of the groupby
+        # an actual joincond that was filtered for specifically
+        # problem when you write Award.query(lambda x: x.project.nhm)
+        # is that the groupby won't be added until after the filter is applied, so the project won't have a groupby
+        
+        # if res.joincond.getJoins().filter(lambda x: x.iswhere):
+            # res.groupbys -= newinstance.primary.values()
+        
+        # return res
+        return newinstance.asQuery().filter(cond).groupby(newinstance.groupbys)
     
     def getTables(self):
         return self.values().getTables()
-    def getSaved(self):
-        return L(*self.__dict__.items()).filter(lambda x: '_saved' in x[0]).fmap(lens[1])
+    
+    
     def getForeign(self):
-        return L(*self.__dict__.items()).filter(lambda x: '_saved' in x[0]).fmap(lens[1]).getTables()
+        return L(*self.__dict__.items()).filter(lambda x: '_saved' in x[0])
+    # def getForeign(self):
+        # return L(*self.__dict__.items()).filter(lambda x: '_saved' in x[0]).fmap(lambda x: x[1]).getTables()
     
     def modify(self, mfunc):
         for key, expr in self.items():
             self[key] = mfunc(expr)
+        # newprimary = copy(self.primary)
+        # for pkey, pexpr in self.primary.items():
+        #     newprimary[pkey] = mfunc(pexpr)
+        # self.primary = newprimary
     
     def fmap(self, mfunc):
         res = copy(self)
@@ -436,7 +482,7 @@ class Columns(dict):
         return getattr(self, self.keys()[0])
     
     def asCols(self):
-        return self
+        return copy(self)
     
     def keys(self):
         return L(*dict.keys(self))
@@ -467,12 +513,13 @@ class Columns(dict):
             break
         return res
     
-    def primary(self):
-        # will get overwritten
-        return self.firstCol()
+    # def primary(self):
+    #     # will get overwritten
+    #     return Columns({None:self.groupbys[0]})
+    #     # return self.firstCol()
     
-    def primarynames(self):
-        return self.primary().keys()
+    # def primarynames(self):
+    #     return self.primary.keys()
     
     
     # %% ^━━━━━━━━━━━━━━━━━ DEFINING KEYS ━━━━━━━━━━━━━━━━━━━━━^
@@ -482,58 +529,48 @@ class Columns(dict):
         
         self[attrname] = BaseExpr(fieldname, self.__class__.table)
         selfclass = self.__class__
+        # self.__class__.table.instance = self
         
         if primary:
             
-            def self_primary():
-                return getattr(self, attrname)
-            self.primary = self_primary
-            
+            self.primary = getattr(self, attrname)
+            self.groupbys = L(self[attrname])
+        
             @functions.injective()
             def primary_key_cols(self):
                 # try:
-                return selfclass.query(lambda x: getattr(x, attrname) == getattr(self, attrname))
+                return selfclass.query().join(lambda x: getattr(x, attrname) == getattr(self, attrname))
                 # except AttributeError:
                 #     raise KeyError("No such primary key: ", self, attrname)
             setattr(Columns, selfclass.__name__.lower(), primary_key_cols)
-            
-            @functions.Kleisli
-            def foreign_key_cols(self, cond=None):
-                # try:
-                joinfield = (self.keys() ^ selfclass().keys())[0]
-                return selfclass.query(lambda x: getattr(x, joinfield) == getattr(self, joinfield))
-                # except IndexError:
-                    # raise KeyError("No such foreign key: ", self, selfclass.__name__.lower())
-            setattr(Columns, selfclass.__name__.lower() + 's', foreign_key_cols.func)
-            
-            
+        
         if foreign:
             
             if ref is None: ref = foreign.__name__.lower()
             @functions.injective(ref)
             def primary_key(self):
-                return foreign.query(lambda x: x.primary() == getattr(self, attrname))
-                    # .groupby(self.groupbys)# + self.primary().values())
-                # self @= res
-                # return res
+                return foreign.query().join(lambda x: getattr(x, 'primary') == getattr(self, attrname))
             setattr(selfclass, ref, primary_key)
             
             if backref is None: backref = selfclass.__name__.lower() + 's'
             @functions.Kleisli
             def foreign_key(self, cond=None):
-                res = selfclass.query(lambda x: getattr(x, attrname) == self.primary()).filter(cond)#.groupby(self.groupbys)
-                # if not self.groupbys:
-                #     res.groupbys += self.primary().values()
-                # else:
-                #     res.groupbys += self.groupbys
-                return res
+                return selfclass.query().join(lambda x: getattr(x, attrname) == getattr(self, 'primary')).filter(cond)
             setattr(foreign, backref, foreign_key.func)
+            
+            @functions.Kleisli
+            def foreign_key_cols(self, cond=None):
+                # try:
+                jfield = (self.keys() ^ selfclass().keys())[0]
+                return selfclass.query().join(lambda x: getattr(x, jfield) == getattr(self, jfield)).filter(cond)
+                # except IndexError:
+                    # raise KeyError("No such foreign key: ", self, selfclass.__name__.lower())
+            setattr(Columns, selfclass.__name__.lower() + 's', foreign_key_cols.func)
     
     
     def setPrimary(self, *args):
-        def multi_primary():
-            return L(*args).fmap(lambda x: getattr(self, x)).fold(Columns.__mod__)
-        self.primary = multi_primary
+        self.primary = L(*args).fmap(lambda x: getattr(self, x))
+        self.groupbys = L(*args).fmap(lambda x: self[x])
         
         
     # %% ^━━━━━━━━━━━━━ PUBLIC FUNCTIONS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^
@@ -541,14 +578,23 @@ class Columns(dict):
     def label(self, newname):
         # MUTATES
         multiple = False
-        if len(self) > 1:
+        res = copy(self)
+        if len(res) > 1:
             multiple = True
             # raise AttributeError("Columns must have one column only to label")
-        for key, expr in self.items():
-            del self[key]
+        for key, expr in res.items():
+            del res[key]
             if multiple: 
-                self[newname + '_' + key] = expr
+                res[newname + '_' + key] = expr
             else:
-                self[newname] = expr
-        return self
-
+                res[newname] = expr        
+        return res
+    
+    @property
+    def one(self):
+        # say this if you know that the row will be unique, for example with 
+        res = copy(self)
+        resgroupbys = copy(res.groupbys)
+        resgroupbys.pop()
+        res.groupbys = resgroupbys
+        return res

@@ -15,26 +15,59 @@ def asExpr(value):
 
 
 def augment(func):
+    # Columns -> Columns and Columns -> Query
     # for functions that go to another table
+    # all we want to do is lift func to something that carries through the joinconds and the groupbys
+    # the complication is that we need it to addquery, or do we?
     @wraps(func)
     def mfunc(*args, **kwargs):
+        
         res = func(*args, **kwargs)
-        if isinstance(res, Query):
-            res = res.joinM()
+        # if isinstance(res, Query): res = res.joinM()
+        
         colargs = L(*args).filter(lambda x: isinstance(x, Columns))
-        res.joincond += colargs.fmap(lambda x: x.joincond).sum()
-        res.groupbys += colargs.bind(lambda x: x.groupbys)        
-        if isinstance(res, Query):
-            res.groupbys -= res.columns.primary().values()
-        else:
-            res.groupbys -= res.primary().values()
-        if isinstance(res, Query) and not res.groupbys:
-            res.groupbys += colargs.bind(lambda x: x.primary().values())
+        oldgroupbys = colargs.bind(lambda x: x.groupbys)
+        oldjc = colargs.fmap(lambda x: x.asQuery()).fold(lambda x, y: x | y)
+        
+        # if isinstance(res, Query):
+        # pretty sure thid gets handled by the joinM
+        #     rescols = res.columns
+        #     res @= colargs.fmap(lambda x: x.asQuery()).sum()
+        #     res.columns = rescols
         # else:
-        #     res.primary = args[0].primary
+        
+        #     # rescols = res.clear()
+        #     res.joincond @= colargs.fmap(lambda x: x.asQuery()).sum().joincond
+        #     # res.__dict__.update(rescols)
+        
+        # res.groupbys += colargs.bind(lambda x: x.groupbys)
+        # if isinstance(res, Query):
+        #     res.groupbys -= res.columns.primary().values()
+        # else:                
+        #     res.groupbys -= res.primary().values()
+        # if isinstance(res, Query) and not res.groupbys:
+        #     res.groupbys += colargs.bind(lambda x: x.primary().values())
+        
+        if isinstance(res, Columns):
+            res = addQuery(oldjc, res.asQuery(), addcols='right').asCols()
+            res = res.label(labelResult(func, colargs))
+        else:
+            res = addQuery(oldjc, res.asQuery(), addcols='right')
+            # this breaks things
+            # res.columns = res.columns.label(func.__name__)
+        
+        res.groupbys = oldgroupbys + res.groupbys
+        
+        # argquery = colargs.fmap(lambda x: x.asQuery()).sum()
+        # res.joincond @= colargs.fmap(lambda x: x.asQuery()).sum()
+        
         return res
     return mfunc
 
+
+def labelResult(func, args):
+    return func.__name__.strip('_') + '_' + args.bind(lambda x: x.keys()).intersperse('_')
+    
 
 def lift(func):
     """
@@ -43,18 +76,49 @@ def lift(func):
     """
     @wraps(func)
     def colfunc(*args, **kwargs):
+        
         res = Columns()
-        # exact replica of augment logic
         colargs = L(*args).filter(lambda x: isinstance(x, Columns))
-        res.joincond += colargs.fmap(lambda x: x.joincond).sum()
-        res.groupbys += colargs.bind(lambda x: x.groupbys)
-        # end
-        newkey = func.__name__.strip('_') + '_' + colargs.bind(lambda x: x.keys()).intersperse('_')
-        res[newkey] = func(*L(*args).fmap(asExpr), **kwargs)
+        
+        res[labelResult(func, colargs)] = func(*L(*args).fmap(asExpr), **kwargs)
+        
+        # replica of augment logic
+        res.groupbys = colargs.bind(lambda x: x.groupbys)
+        res.joincond @= colargs.fmap(lambda x: x.asQuery()).sum()
+        # oldjc = colargs.fmap(lambda x: x.asQuery()).fold(lambda x, y: x @ y)
+        # res = addQuery(oldjc, res.asQuery(), addcols='right').asCols()
+        
         return res
+        
     setattr(Columns, func.__name__, colfunc)
     setattr(Expr, '_' + func.__name__, func)
     return colfunc
+
+
+def injective(fname=None):
+    def decorator(func):
+        nonlocal fname
+        if fname is None:
+            fname = func.__name__
+        @property
+        def colfunc(self, *args, **kwargs):
+            if hasattr(self, fname + '_saved'):
+                return getattr(self, fname + '_saved')
+            
+            res = func(self, *args, **kwargs)
+            
+            # another replica of augment
+            res.groupbys = self.groupbys + res.groupbys
+            res = addQuery(self.asQuery(), res.asQuery(), addcols='right').one
+            
+            # res.joincond &= self.joincond
+            # STOP using primary as a way to track where the column came from, that's the role of the group bys
+            # res.groupbys -= res.primary().values()
+            object.__setattr__(self, fname + '_saved', res)
+            
+            return res
+        return colfunc
+    return decorator
 
 
 def sqlfunc(strfunc):
@@ -71,22 +135,25 @@ def aggfunc(strfunc):
     def exprfunc(*exprs, **kwargs):
         return AggExpr(strfunc, *exprs, **kwargs)
     @wraps(strfunc)
-    def qfunc(q0, colname=None, **kwargs):        
+    def qfunc(q0, colname=None, **kwargs):
         if colname is not None:
             q0 = q0.fmap(lambda x: getattr(x, colname))
         elif len(q0.columns) > 1:
-            q0 = q0.fmap(lambda x: x.primary())
+            # this is so you can do milestones().count() instead of milestones().count('trid')
+            q0.columns = q0.getPrimary()
+            # q0 = q0.fmap(lambda x: q0.getPrimary())
         return q0.aggregate(lambda x: exprfunc(x, **kwargs))
     setattr(Query, strfunc.__name__[:-1], qfunc)
     return exprfunc
 
 
 # this dooesn't work...
-def memoize(funcname=None):
+def memoize(fname=None):
     def decorator(func):
-        nonlocal funcname
-        if funcname is None:
-            funcname = func.__name__
+        nonlocal fname
+        if fname is None:
+            fname = func.__name__
+        @wraps(func)
         def mfunc(self, *args, **kwargs):
             if hasattr(self, func.__name__ + '_saved'):
                 return getattr(self, func.__name__ + '_saved')
@@ -94,31 +161,6 @@ def memoize(funcname=None):
             object.__setattr__(self, func.__name__ + '_saved', res)
             return res
         return mfunc        
-    return decorator
-
-
-def injective(funcname=None):
-    def decorator(func):
-        nonlocal funcname
-        if funcname is None:
-            funcname = func.__name__
-        @property
-        def colfunc(self, *args, **kwargs):
-            if hasattr(self, funcname + '_saved'):
-                return getattr(self, funcname + '_saved')
-            res = func(self, *args, **kwargs)
-            # if not isinstance(res, Columns):                
-                # self.joincond @= res.joincond
-            res = res.asCols()
-            res.groupbys -= res.primary().values()
-            # this is the only place other than binds where we add another groupby
-            res.groupbys = self.primary().values() + res.groupbys
-            # def injective_primary():
-            #     return self.primary()
-            # res.primary = injective_primary
-            object.__setattr__(self, funcname + '_saved', res)
-            return res
-        return colfunc
     return decorator
 
 
@@ -329,7 +371,7 @@ def ratio_(expr, cond):
 @Lifted
 def between(self, bound, tlimit=None, ts='ts'):
     
-    # add a decorator for this
+    # todo: add a decorator for this
     try:
         tsvar = getattr(self, ts)
     except AttributeError:

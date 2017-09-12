@@ -14,7 +14,7 @@ def sql(self, display=True, reduce=True, subquery=False):
     # self = deepcopy(self)
     if type(self) is Table: return str(self)
     if reduce: reduceQuery(self)
-    
+        
     # if not subquery and reduce: relabel(self)
     
     alltables = self.getTables()
@@ -38,7 +38,7 @@ def sql(self, display=True, reduce=True, subquery=False):
             # if not table.leftjoin or not fulltables:
             #     wheres += remainingcond._filter(table).children
             # else:
-            wheres += remainingcond._filter(table).children.filter(lambda x: x.iswhere and not x.isagg())
+            wheres += remainingcond._filter(table).children.filter(lambda x: (x.iswhere or not table.leftjoin) and not x.isagg())
             havings += remainingcond.children.filter(lambda x: x.isagg())
             joins = remainingcond._filter(table, addedtables).children - wheres - havings
             
@@ -68,7 +68,7 @@ def sql(self, display=True, reduce=True, subquery=False):
     res += f'\n{lastSeparator(res)}GROUP BY ' + groupbys.intersperse(', ')
     
     # ==HAVING...
-    if havings: res += f'\nHAVING ' + havings.intersperse('\n    AND')
+    if havings: res += f'\nHAVING ' + havings.intersperse('\n    AND ')
     
     # ==ORDER BY / LIMIT...
     if self.ordervar: res += f'\nORDER BY ' + self.ordervar.intersperse(', ')

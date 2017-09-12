@@ -110,6 +110,10 @@ class L(list):
         for i, el in self.enumerate():
             self[i] = mfunc(el)
     
+    def combine(self):
+        # import query
+        return self.fold(lambda x, y: x @ y)
+    
     def enumerate(self):
         return L(*[(k, v) for k, v in enumerate(self)])
     

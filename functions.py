@@ -79,12 +79,11 @@ def lift(func):
         
         res = Columns()
         colargs = L(*args).filter(lambda x: isinstance(x, Columns))
-        
         res[labelResult(func, colargs)] = func(*L(*args).fmap(asExpr), **kwargs)
         
         # replica of augment logic
         res.groupbys = colargs.bind(lambda x: x.groupbys)
-        res.joincond @= colargs.fmap(lambda x: x.asQuery()).sum()
+        res.joincond @= colargs.fmap(lambda x: x.asQuery()).combine()
         # oldjc = colargs.fmap(lambda x: x.asQuery()).fold(lambda x, y: x @ y)
         # res = addQuery(oldjc, res.asQuery(), addcols='right').asCols()
         
@@ -145,6 +144,11 @@ def aggfunc(strfunc):
         return q0.aggregate(lambda x: exprfunc(x, **kwargs))
     setattr(Query, strfunc.__name__[:-1], qfunc)
     return exprfunc
+
+
+def windowfunc(strfunc):
+    # not implemented
+    return strfunc
 
 
 # this dooesn't work...
@@ -341,9 +345,9 @@ def count_(expr):
     return f'COUNT(DISTINCT {expr})'
 @aggfunc
 def avg_(expr, ntile=None):
-    expr = Expr._coalesce_(expr, 0)
-    return f'AVG({expr})'
-    # return f'AVG(COALESCE({expr}), 0)'
+    # expr = Expr._coalesce_(expr, 0)
+    # return f'AVG({expr})'
+    return f'AVG(COALESCE({expr}), 0)'
 @aggfunc
 def sum_(expr):
     return f'SUM({expr})'
@@ -359,6 +363,42 @@ def any_(expr):
 @aggfunc
 def all_(expr):
     return f'BOOL_AND({expr})'
+@aggfunc
+def median_(expr, partitions=None):
+    return f'MEDIAN({expr})'
+
+
+
+# %% ^━━━━━━━━━━━━━━━━━━━━ WINDOW FUNCTIONS ━━━━━━━━━━━━━━━━━━^
+
+def partstr(partitions):
+    if partitions is not None:
+        return 'OVER' + '(PARTITION BY' + ','.join(map(str, partitions)) + ')'
+    return ''
+
+# @windowfunc
+# def ntile_(perc=100, expr=None, partitions=None, order=None):
+#     return f'NTILE({perc}) OVER (PARTITION BY {partitions} ORDER BY {expr})'
+@windowfunc
+def listagg_(expr=None, order=None):
+    return f'LISTAGG({expr}) WITHIN GROUP (ORDER BY {expr})'
+# @windowfunc
+# def quantileof_(perc=100, expr=None, partitions=None):
+#     return f'PERCENTILE_DISC({perc/100}) WITHIN GROUP (ORDER BY {expr}){partitions}'
+# @windowfunc
+# def median_(expr, partitions=None):
+#     return f'MEDIAN({expr}) OVER (PARTITION BY {partitions})'
+@windowfunc
+def rank_(order=None, partitions=None):
+    return f'ROW_NUMBER() OVER (PARTITION BY {partitions} ORDER BY {order})'
+@windowfunc
+def first_(expr, *partitions, order):
+    parts = ','.join(map(str, partitions))
+    return f'''FIRST_VALUE ({expr}) OVER (PARTITION BY {parts} ORDER BY {orderby} ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)'''
+@windowfunc
+def last_(expr, *partitions, order):
+    parts = ','.join(map(str, partitions))
+    return f'''LAST_VALUE ({expr}) OVER (PARTITION BY {parts} ORDER BY {orderby} ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)'''
 
 
 

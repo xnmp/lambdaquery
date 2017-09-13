@@ -5,6 +5,7 @@ from itertools import product
 
 def addParents(self, reset=False):
     if reset:
+        self.parents = L()
         for table in self.getTables():
             table.parents = L()
     for table in self.getTables():
@@ -21,6 +22,7 @@ def toReroute(self):
     # if len(self.parents) <= 1:
         # return False
     for parent1, parent2 in product(self.parents, self.parents):
+        parent1 in ancestors(parent2) or parent2 in ancestors(parent1)
         if parent1 in ancestors(parent2) or parent2 in ancestors(parent1):
             return True
     return False
@@ -286,17 +288,18 @@ def mergeGrouped(self):
                            .fmap(lambda x: x.value)
     
     for tablegroup in alltablegroups:
-        sumtables = tablegroup.sum()
-        self.setSource(sumtables, oldtable=tablegroup)
+        # merged = tablegroup.combine()
+        merged = tablegroup.fold(lambda x, y: x | y)
+        self.setSource(merged, oldtable=tablegroup)
         
         # print(self.sql(reduce=False))
         
         if self in tablegroup:
             # merge with a subquery and convert the agg exprs
-            sumtables.modify(lambda x: x.getRef(oldtables=tablegroup))
-            self.modify(lambda x: x.getRef(oldtables=L(sumtables)))
-            sumtables.columns = self.columns
-            self.__dict__.update(sumtables.__dict__)
+            merged.modify(lambda x: x.getRef(oldtables=tablegroup))
+            self.modify(lambda x: x.getRef(oldtables=L(merged)))
+            merged.columns = self.columns
+            self.__dict__.update(merged.__dict__)
             break
 
 
@@ -335,8 +338,7 @@ def reduceQuery(self):
     print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
     print("REDUCING...")
     print(self.sql(reduce=False))    
-    
-    
+        
     # STEP 1: REDUCE CHILDREN
     for subtable in self.subQueries():
         reduceQuery(subtable)
@@ -408,8 +410,8 @@ def reduceQuery(self):
         print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
     
     # STEP 6: MOVE IN THE "HAVING" EXPRS
-    for newtable in self.subQueries():
-        moveInHaving(inner=newtable, outer=self)
+    # for newtable in self.subQueries():
+    #     moveInHaving(inner=newtable, outer=self)
     
     # STEP 7: CLEAN UP REDUNDANT OUTERMOST QUERY
     if canCleanUp(self):
@@ -418,6 +420,11 @@ def reduceQuery(self):
         print("CLEANED UP...")
         print(self.sql(reduce=False))
         print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
+    
+    # STEP 8: REPEAT IF THERE'S STILL MORE TO DO
+    if getRerouteTables(self):
+        print("REROUTING AGAIN")
+        reduceQuery(self)
     
     print("FINISHED REDUCING")
     print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')

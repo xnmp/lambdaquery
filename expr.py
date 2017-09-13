@@ -31,11 +31,14 @@ class Table(object):
         return self.tablename + " AS " + self.abbrev
     
     # def __eq__(self, other):
+    #     return self.tablename == other.tablename and self.alias == other.alias
     #     copy1 = copy(self).__dict__
     #     copy2 = copy(other).__dict__
     #     del copy1['instance']
     #     del copy2['instance']
     #     return copy1 == copy2
+    
+    
     
     @property
     def abbrev(self):
@@ -356,6 +359,13 @@ class ConstExpr(Expr):
         else:
             return f"{self.value}"
 
+class SubQueryExpr(Expr):
+    # value for a correlated subquery
+    def __init__(self, subquery):
+        self.subquery = subquery
+    def __repr__(self):
+        return f'SubQueryExpr({self.subquery.sql(display=False)})'
+
 
 class Columns(dict):
     
@@ -459,7 +469,6 @@ class Columns(dict):
     def getTables(self):
         return self.values().getTables()
     
-    
     def getForeign(self):
         return L(*self.__dict__.items()).filter(lambda x: '_saved' in x[0])
     # def getForeign(self):
@@ -531,12 +540,15 @@ class Columns(dict):
         selfclass = self.__class__
         # self.__class__.table.instance = self
         
+        # these are all defined every ttime it's instantiate, which is bad design. Better to define once. 
+        
         if primary:
             
             self.primary = getattr(self, attrname)
             self.groupbys = L(self[attrname])
         
             @functions.injective()
+            @rename(selfclass.__name__.lower())
             def primary_key_cols(self):
                 # try:
                 return selfclass.query().join(lambda x: getattr(x, attrname) == getattr(self, attrname))
@@ -592,7 +604,7 @@ class Columns(dict):
     
     @property
     def one(self):
-        # say this if you know that the row will be unique, for example with 
+        # say this if you know that the row will be unique, for example with an abtest enrollment, or with exists
         res = copy(self)
         resgroupbys = copy(res.groupbys)
         resgroupbys.pop()

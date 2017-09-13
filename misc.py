@@ -29,6 +29,12 @@ def base10toN(num,n=36):
 def memloc(self):
     return base10toN(id(self), 36)[-4:]
 
+def rename(newname):
+    def decorator(f):
+        f.__name__ = newname
+        return f
+    return decorator
+
 def listunion(*lists):
     if lists == (): return []
     lnew = []

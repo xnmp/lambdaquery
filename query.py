@@ -27,6 +27,11 @@ class Query(Table, Monad):
     #     else:
     #         return object.__getattribute__(self, attrname)
     
+    # def __eq__(self, other):
+    #     return self.columns.__dict__ == other.columns.__dict__ \
+    #             and self.joincond.__dict__ == other.joincond.__dict__ \
+    #             and self.groupbys.__dict__ == other.groupbys.__dict__
+    
     def __add__(self, other):
         return addQuery(self, other)
         
@@ -104,7 +109,7 @@ class Query(Table, Monad):
         return self.columns.values().filter(lambda x: x.isagg()).any()
     
     def asQuery(self):
-        # ALWAYS RETURN A GODDAMN COPY, I JUST SPENT AN HOUR TO FIND THIS 
+        # ALWAYS RETURN A GODDAMN COPY
         return copy(self)
     
     def subQueries(self):
@@ -125,6 +130,7 @@ class Query(Table, Monad):
     
     
     def ungroupby(self):
+        # MUTATES
         grouptable = self.groupbys[-1].table
         pnames = grouptable.primarynames()
         
@@ -150,8 +156,11 @@ class Query(Table, Monad):
             del newsource.columns[key]
             newsource.columns[dummylabel] = expr
             # SUPER IMPORTANT POINT: REMOVE A GROUP BY HERE
-            self.ungroupby()
-            # newsource.groupbys.pop()# = newsource.groupbys[:-1]
+            newsource.ungroupby()
+        
+        # if len(res) == 1 and not newsource.groupbys:
+        #     res = Columns({newsource.alias:SubQueryExpr(newsource)})
+        
         return res
     
     
@@ -217,11 +226,10 @@ class Query(Table, Monad):
         assert not res.columns.joincond.children
         # res.columns = hi.asCols()
         qnew = bfunc(self.asCols())#bfunc(self.columns)
-        print("BIND")        
-        res += qnew
+        res @= qnew
         if qnew.columns.keys():
             res.columns = qnew.columns
-        res.groupbys += qnew.groupbys # self.columns.primary.values()
+        res.groupbys += qnew.groupbys
         return res.joinM()
     
     
@@ -237,7 +245,6 @@ class Query(Table, Monad):
         # hh = a + b
         kwargs = L(*kwargs.items()).fmap(lambda x: x[1].label(x[0]))
         res = L(*args, *kwargs).fmap(lambda x: x.asQuery()).fold(lambda x, y: x @ y)
-                
         
         if filter is not None: res = res.filter(filter)
         if limit is not None: res = res.limit(limit)
@@ -289,11 +296,11 @@ class Query(Table, Monad):
         res.joincond &= AndExpr(newconds.values()).setWhere()
         res.joincond &= newconds.joincond
         
-        return res#.joinM()
+        return res #.joinM()
     
     
     # def joinOn(self, cond=None):
-    #     return self.filter
+    #     return self.filter(cond=cond)
     
     
     def lj(self):
@@ -305,6 +312,13 @@ class Query(Table, Monad):
         for tab in res.columns.getTables():            
             tab.leftjoin = True
         res.modify(lambda x: x.setWhere(False), 'joincond')
+        
+        # for key, col in self.columns.getForeign(): #L(*self.__dict__.items()).filter(lambda x: '_saved' in x[0])
+        
+        for k, v in self.columns.__dict__.items():
+            if '_saved' in k:
+                v.asExpr().table.leftjoin = True
+        
         return res
 
 
@@ -338,6 +352,8 @@ def addQuery(self, other, addcols='both'):
     for tab1 in tables1:
         skiptable = False
         cond1 = other.joincond._filter(tab1, jtables)
+        
+        tables0.filter(lambda x: x == tab1)
         
         for tab0 in tables0.filter(lambda x: x.__dict__ == tab1.__dict__):
             cond0 = res.joincond._filter(tab0, jtables)

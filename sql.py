@@ -64,13 +64,17 @@ def sql(self, display=True, reduce=True, subquery=False):
     if wheres: res += f'\n{lastSeparator(res)}WHERE ' + wheres.intersperse('\n    AND ')
     
     # ==GROUP BY...
-    # if self.isagg():
-        # groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg()).len() + 1))
-    #     if subquery or not groupbys:
-    #         groupbys += (self.groupbys + havings.bind(Expr.baseExprs)).filter(lambda x: x not in exprs)
-    #     res += '\n\nGROUP BY ' + groupbys.intersperse(', ')
-    groupbys = self.groupbys + havings.bind(Expr.havingGroups)
-    res += f'\n{lastSeparator(res)}GROUP BY ' + groupbys.intersperse(', ')
+    if self.isagg():
+        groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg()).len() + 1))
+        if subquery or not groupbys:
+            groupbys += (self.groupbys + havings.bind(Expr.baseExprs)).filter(lambda x: x not in exprs)
+        groupbys += havings.bind(Expr.havingGroups)
+        if groupbys:  
+            res += '\n\nGROUP BY ' + groupbys.intersperse(', ')
+            
+    # for debugging
+    # groupbys = self.groupbys + havings.bind(Expr.havingGroups)
+    # res += f'\n{lastSeparator(res)}GROUP BY ' + groupbys.intersperse(', ')
     
     # ==HAVING...
     if havings: res += f'\nHAVING ' + havings.intersperse('\n    AND ')

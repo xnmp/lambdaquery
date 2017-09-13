@@ -158,8 +158,9 @@ class Query(Table, Monad):
             # SUPER IMPORTANT POINT: REMOVE A GROUP BY HERE
             newsource.ungroupby()
         
-        # if len(res) == 1 and not newsource.groupbys:
-        #     res = Columns({newsource.alias:SubQueryExpr(newsource)})
+        if len(res) == 1 and not newsource.groupbys:
+            newsource = deepcopy(newsource)
+            res = Columns({newsource.alias:SubQueryExpr(newsource)})
         
         return res
     

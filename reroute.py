@@ -136,8 +136,10 @@ def canReroute(expr, basetable, target):
 
 
 def canCleanUp(self):
-    return len(self.getTables()) == 1 and type(self.getTables()[0]) is not Table \
-      and self.columns.values().fmap(lambda x: isinstance(x, BaseExpr)).all()
+    inner = self.getTables()[0]
+    return len(self.getTables()) == 1 and type(inner) is not Table \
+      and self.columns.values().fmap(lambda x: isinstance(x, BaseExpr)).all() \
+      and not self.joincond.children # and self.groupbys.fmap(lambda x: x.getRef()) == inner.groupbys
 
 
 # %% ^━━━━━━━━━━━━━━━━━ THE HARD PART: REROUTING ━━━━━━━━━━━━━━━^

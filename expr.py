@@ -364,7 +364,7 @@ class SubQueryExpr(Expr):
     def __init__(self, subquery):
         self.subquery = subquery
     def __repr__(self):
-        return f'SubQueryExpr({self.subquery.sql(display=False)})'
+        return f'({self.subquery.sql(display=False)})'
 
 
 class Columns(dict):

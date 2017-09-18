@@ -110,7 +110,6 @@ def canMoveOut(table, inner, outer):
 def canMoveIn(expr, inner, outer):
     
     # if it's only part of a single subquery
-    
     willmove = outer.getTables().filter(lambda x: x.isQuery() and expr.getTables() ^ x.getTables()).len() <= 1
     
     # if the tables of expr are on the inside, OR if it's joined by primary key to something whose tables are on the inside
@@ -133,6 +132,101 @@ def canReroute(expr, basetable, target):
     # if the tables of expr are a subset of the tables of the target... and not aggregate and not constant
     return basetable in expr.getTables() and expr.getTables() <= target.getTables() \
            and type(expr) is not ConstExpr and (not expr.isagg())
+
+def canRerouteTable(basetable, inner, outer):
+    
+    allexprs = outer.allExprs().bind(lambda x: x.descendants())\
+        .filter(lambda x: type(x) is BaseExpr and basetable in x.getTables())
+    
+    hi = allexprs.fmap(lambda x: isGrouped(x, inner)).all()
+    return hi
+    
+    # # if basetable is in 
+    # if basetable in getGroups(inner).filter(lambda x: x.isPrimary()).getTables():
+    #     return True
+    
+    # # if all baseexprs involving the basetable are joined to the target
+    # return outer.allExprs().bind(lambda x: x.descendants())\
+    #     .filter(lambda x: type(x) is BaseExpr and basetable in x.getTables()) <= getGroups(target)
+
+
+def isGrouped(expr, target):
+    '''
+    an expr is grouped if any of the following are true:
+    1. expr is one of the target's groupbys
+    2. the tables of expr are part of the target's primary grouped by tables
+    2. expr is in the getEqs of the target's groupbys
+    3. expr is joined by primary key to something thats's grouped
+    4. expr is in the getEqs of something that's grouped
+    '''
+    
+    
+    
+    # if expr is grouped by, or is joined to anything of the primary keys, 
+    # everything equal to a groupby expr
+    alleqs = target.groupbys.bind(lambda x: getAllEqsRecursive(x, target.joincond.children))
+    
+    allgroups = getGroups(target)
+    
+    return expr in allgroups or expr.getTables() <= allgroups.filter(lambda x: x.isPrimary()).getTables()
+    # return expr in alleqs or expr.getTables() <= target.groupbys.getTables() + alleqs.filter(lambda x: x.isPrimary()).getTables()
+
+def getAllEqsRecursive(expr, jclist):
+    jclistnew = L(expr)
+    jclistold = None
+    while jclistnew != jclistold:
+        jclistold = copy(jclistnew)
+        jclistnew += jclistnew.bind(lambda x: getAllEqs(x, jclist))
+    return jclistnew
+
+
+def getAllEqs(expr, jclist):
+    """
+    get everything in jclist that's equal to expr
+    """
+    res = L()
+    for eqexpr in jclist.filter(lambda x: isinstance(x, EqExpr)):
+        if expr == eqexpr.children[0] or eqexpr.children[0] in res:
+            res += eqexpr.children[1]
+        elif expr == eqexpr.children[1] or eqexpr.children[1] in res:
+            res += eqexpr.children[0]
+    return res
+
+def getGroups(target):
+    
+    res = target.groupbys
+    resold = None
+    
+    while res != resold:
+        resold = copy(res)
+        res += res.bind(lambda x: getAllEqsRecursive(x, target.joincond.children))
+        for eqexpr in getEqExprs(target):
+            if eqexpr.children[0].getTables() <= res.filter(lambda x: x.isPrimary()).getTables():
+                res += eqexpr.children[1]
+            elif eqexpr.children[1].getTables() <= res.filter(lambda x: x.isPrimary()).getTables():
+                res += eqexpr.children[0]
+    return res
+
+def getEqExprs(table):
+    return table.joincond.children.filter(lambda x: type(x) is EqExpr)
+
+
+# def getGroupJoins(target, groupbys):
+#     # everything joincond of target that's joined to a specified set of exprs
+#     return target.joincond.children.filter(lambda x: isinstance(x, EqExpr) 
+#                                     and x.children[0] in groupbys or x.children[0] in groupbys) \
+#                 .fmap(lambda x: x.children[1] if x.children[0] in groupbys else x.children[0])
+
+# def getGroups(target):
+    
+#     # everything joined to a groupby of the target, or joined to one of those things, etc
+#     # or, if the groupby is a primary key of a table, everything joined to an expr of that table
+    
+#     pkey_joins = target.joincond.children \
+#                 .filter(lambda x: isinstance(x, EqExpr)) \
+#                 .filter(lambda x: isGrouped(x.children[0], target) or isGrouped(x.children[1], target))
+#     other_groupbys = pkey_joins.fmap(lambda x: x.children[1] if x.children[0] in target.groupbys else x.children[0])    
+#     return other_groupbys + target.groupbys
 
 
 def canCleanUp(self):
@@ -291,7 +385,8 @@ def mergeGrouped(self):
     
     for tablegroup in alltablegroups:
         # merged = tablegroup.combine()
-        merged = tablegroup.fold(lambda x, y: x | y)
+        
+        merged = tablegroup.fold(lambda x, y: x @ y)
         self.setSource(merged, oldtable=tablegroup)
         
         # print(self.sql(reduce=False))
@@ -305,13 +400,14 @@ def mergeGrouped(self):
             break
 
 
-def copyTable(table, parent):
-    # this is probably obsolete, but may be needed when we need to clone join conditions into subqueries
+def copyTable(table, parent, addcond=True):
+    # when a table can't be rerouted
+    # also needed to clone join conditions into subqueries
     tablecopy = copy(table)
     tablecopy.alias += '_copy'
     parent.setSource(tablecopy, oldtable=table)
-    eqexprs = tablecopy.tableclass().primarynames().fmap(lambda x: EqExpr(BaseExpr(x, table), BaseExpr(x, tablecopy)))
-    parent.joincond &= AndExpr(eqexprs)
+    eqexprs = tablecopy.primarynames().fmap(lambda x: EqExpr(BaseExpr(x, table), BaseExpr(x, tablecopy)))
+    if addcond: parent.joincond &= AndExpr(eqexprs)
 
 
 def cleanUp(self):
@@ -323,6 +419,10 @@ def cleanUp(self):
         newquery.columns[key] = newquery.columns[expr.fieldname]
         del newquery.columns[expr.fieldname]
     self.__dict__.update(newquery.__dict__)
+
+
+def copyJoinconds(basetable, source, target):
+    target.joincond &= AndExpr(source.joincond.children.filter(lambda x: x.isJoin() & (basetable in x.getTables())))
 
 
 # %% ^━━━━━━━━━━━━━━━━━━━━━━━ REDUCE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^
@@ -340,13 +440,8 @@ def reduceQuery(self):
     print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
     print("REDUCING...")
     print(self.sql(reduce=False))    
-        
-    # STEP 1: REDUCE CHILDREN
-    for subtable in self.subQueries():
-        reduceQuery(subtable)
     
-    
-    # STEP 2: MERGE SUBQUERIES WITH THE SAME GROUP BYS
+    # STEP 1: MERGE SUBQUERIES WITH THE SAME GROUP BYS
     selfcopy = copy(self)
     mergeGrouped(self)
     
@@ -363,11 +458,14 @@ def reduceQuery(self):
         print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
         return
     
+    # STEP 2: REDUCE CHILDREN
+    for subtable in self.subQueries():
+        reduceQuery(subtable)
     
     # STEP 3: MOVING IN
     # while :
     #     newtable = self.subQueries()[0]
-        
+    
     #     # first move ones that are on the inside already
     #     for table in self.getTables().filter(lambda x: x in inner):
     #         moveIn(table, inner=newtable, outer=self)
@@ -387,7 +485,7 @@ def reduceQuery(self):
     #     # if canMoveIn(table, inner=newtable, outer=self):
     
     
-    # STEP 4: MOVING OUT
+    # STEP 4: MOVING OUT (PRETTY MUCH OBSOLETE)
     # moveout = False
     for table in getRerouteTables(self):#self.subQueries().getTables():#
         
@@ -401,19 +499,57 @@ def reduceQuery(self):
                 print(self.sql(reduce=False))
                 print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')    
     
+    
+    newtable = self.subQueries()[0]
+    
+    # STEP 4.5: COPY TABLES THAT CAN'T BE REROUTED
+    for table in getRerouteTables(self).filter(lambda x: not canRerouteTable(x, inner=newtable, outer=self)):
+        print("COPY TABLE", table)
+        copyJoinconds(table, newtable, self)
+        copyTable(table, self, addcond=False)
+        
+    
+    
     # STEP 5: REROUTE
     # this is the part that is very reliable
+    # for table in getRerouteTables(self):
+    #     print("REROUTE", table)
+        
+    #     if canRerouteTable(table, inner=newtable, outer=self):
+    #         rerouteAll(table, inner=newtable, outer=self)
+    #     else:
+    #         copyJoinconds(table, newtable, self)
+    #         copyTable(table, self)
+    #         rerouteAll(table, inner=newtable, outer=self)
+    
+    
+    
+    
+    # if getRerouteTables(self).fmap(lambda x: canRerouteTable(x, inner=newtable, outer=self)).all():
+    #     for table in getRerouteTables(self):
+    #         print("REROUTE", table)
+    #         rerouteAll(table, inner=newtable, outer=self)
+    # else:
+    #     for table in getRerouteTables(self):
+    #         print("COPYTABLE", table)
+    #         copyJoinconds(newtable, self)
+    #         copyTable(table, self, addcond=canRerouteTable(table, inner=newtable, outer=self))
+    #         rerouteAll(table, inner=newtable, outer=self)
+    
+    
     for table in getRerouteTables(self):
-        # finish = False
+    
         print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
         print("REROUTE", table)
-        rerouteAll(table, inner=newtable, outer=self)
+        
+        for newtable in table.parents - self:
+            rerouteAll(table, inner=newtable, outer=self)
         # print(self.sql(reduce=False))
         print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
     
     # STEP 6: MOVE IN THE "HAVING" EXPRS
-    # for newtable in self.subQueries():
-    #     moveInHaving(inner=newtable, outer=self)
+    for newtable in self.subQueries():
+        moveInHaving(inner=newtable, outer=self)
     
     # STEP 7: CLEAN UP REDUNDANT OUTERMOST QUERY
     if canCleanUp(self):
@@ -423,10 +559,10 @@ def reduceQuery(self):
         print(self.sql(reduce=False))
         print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
     
-    # STEP 8: REPEAT IF THERE'S STILL MORE TO DO
-    if getRerouteTables(self):
-        print("REROUTING AGAIN")
-        reduceQuery(self)
+    # # STEP 8: REPEAT IF THERE'S STILL MORE TO DO
+    # if getRerouteTables(self):
+    #     print("REROUTING AGAIN")
+    #     reduceQuery(self)
     
     print("FINISHED REDUCING")
     print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')

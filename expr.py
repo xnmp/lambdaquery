@@ -64,6 +64,13 @@ class Table(object):
         return self.tableclass().groupbys.fmap(lambda x: x.fieldname)
         # return self.tableclass().groupbys[0].fieldname
 
+    def isJoined(self, jclist):
+        # if the table is joined by primary key to a query
+        return jclist.filter(lambda x: x.isJoin() 
+                                               and ((x.children[0].isPrimary() and x.children[0].table == self) 
+                                                    or (x.children[1].isPrimary() and x.children[1].table == self))
+                                               ).exists()
+
 
 def baseFunc(exprfunc):
     # turns a function on a BaseExpr into a function on all Exprs
@@ -411,6 +418,15 @@ class Columns(dict):
     def __rshift__(self, func):
         return func(self)
     
+    def findattr(self, attrname):
+        try:
+            return getattr(self, attrname)
+        except AttributeError:
+            for key, expr in self.items():
+                if attrname in key:
+                    return getattr(self, key)
+        raise AttributeError(self, attrname)
+    
     # def joinM(self):
     #     res = copy(self)
     #     newjcs = res.columns.joincond
@@ -464,6 +480,7 @@ class Columns(dict):
             # res.groupbys -= newinstance.primary.values()
         
         # return res
+        # the groupby at the end actually isn't needed, they get passed on anyway by the asQuery
         return newinstance.asQuery().filter(cond).groupby(newinstance.groupbys)
     
     def getTables(self):
@@ -551,7 +568,7 @@ class Columns(dict):
             @rename(selfclass.__name__.lower())
             def primary_key_cols(self):
                 # try:
-                return selfclass.query().join(lambda x: getattr(x, attrname) == getattr(self, attrname))
+                return selfclass.query().join(lambda x: getattr(x, attrname) == self.findattr(attrname))                
                 # except AttributeError:
                 #     raise KeyError("No such primary key: ", self, attrname)
             setattr(Columns, selfclass.__name__.lower(), primary_key_cols)

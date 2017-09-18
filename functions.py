@@ -228,6 +228,18 @@ def __mul__(self, other):
 def __truediv__(self, other):
     return BinOpExpr(":: FLOAT /", self, other)
 @lift
+def __radd__(self, other):
+    return BinOpExpr("+", other, self)
+@lift
+def __rsub__(self, other):
+    return BinOpExpr("-", other, self)
+@lift
+def __rmul__(self, other):
+    return BinOpExpr("*", other, self)
+@lift
+def __rtruediv__(self, other):
+    return BinOpExpr(":: FLOAT /", other, self)
+@lift
 def __floordiv__(self, other):
     return BinOpExpr("/", self, other)
 @lift
@@ -338,6 +350,13 @@ def row_(partitionexpr, orderexpr):
 
 
 
+@sqlfunc
+def zscore_(expr, partitionexpr):    
+    return f"({expr} - AVG({expr}) OVER (PARTITION BY {partitionexpr})) :: FLOAT / STDDEV({expr}) OVER (PARTITION BY {partitionexpr})"
+
+
+
+
 # %% ^━━━━━━━━━━━━━━━━━━ AGGREGATES ━━━━━━━━━━━━━━━━━━━━^
 
 @aggfunc
@@ -347,7 +366,7 @@ def count_(expr):
 def avg_(expr, ntile=None):
     # expr = Expr._coalesce_(expr, 0)
     # return f'AVG({expr})'
-    return f'AVG(COALESCE({expr}), 0)'
+    return f'AVG(COALESCE({expr}, 0))'
 @aggfunc
 def sum_(expr):
     return f'SUM({expr})'

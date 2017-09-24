@@ -55,15 +55,18 @@ class Table(object):
         return not self.isTable()
     
     def lj(self):
-        # res = copy(self)
-        # res.leftjoin = True
-        # return res
-        return lens(self).leftjoin.set(True)
+        res = copy(self)
+        res.leftjoin = True
+        return res
+        # return lens(self).leftjoin.set(True)
     
     def primarynames(self):
         return self.tableclass().groupbys.fmap(lambda x: x.fieldname)
         # return self.tableclass().groupbys[0].fieldname
-
+    
+    def primaryExpr(self):
+        return BaseExpr(self.primarynames()[0], self)
+    
     def isJoined(self, jclist):
         # if the table is joined by primary key to a query
         return jclist.filter(lambda x: x.isJoin() 
@@ -71,6 +74,12 @@ class Table(object):
                                                     or (x.children[1].isPrimary() and x.children[1].table == self))
                                                ).exists()
 
+    def getDept(self, jclist):
+        # tables that the table depends on
+        return jclist.filter(lambda x: x.isJoin() 
+                                               and ((x.children[0].isPrimary() and x.children[0].table == self) 
+                                                    or (x.children[1].isPrimary() and x.children[1].table == self))
+                                               ).getTables() - self
 
 def baseFunc(exprfunc):
     # turns a function on a BaseExpr into a function on all Exprs
@@ -134,7 +143,11 @@ class Expr(object):
         return type(self) is EqExpr and self.children[0] == self.children[1]
     
     def isPrimary(self):
-        return type(self) is BaseExpr and self.table.primarynames()[0] == self.fieldname
+        try:
+            return type(self) is BaseExpr and self.table.primarynames()[0] == self.fieldname
+        except AttributeError:
+            # this part is for distinct
+            return self.getRef() in self.table.groupbys
     
     def getPrimary(self):
         self.table.primarynames()
@@ -196,10 +209,15 @@ class Expr(object):
         return type(self) is EqExpr \
             and type(self.children[0]) is BaseExpr \
             and type(self.children[1]) is BaseExpr \
-            and self.children[0].table.tablename != self.children[1].table.tablename
+            and self.children[0].table != self.children[1].table
     
     def isagg(self):
         return self.children.filter(lambda x: x.isagg()).any()
+    
+    def istime(self):
+        return type(self) is BaseExpr and 'time' in self.fieldname
+    
+    
     
     def getEqs(self, jc):
         res = L()
@@ -263,6 +281,13 @@ class AndExpr(Expr):
             return "EmptyAndExpr" #or TRUE
         else:
             return " AND ".join(self.children.fmap(repr))
+    
+    def __eq__(self, other):
+        return self.children.len() == other.children.len() \
+            and all([self.children.sort(str)[i] == other.children.sort(str)[i] for i in range(len(self.children))])
+    
+    def __bool__(self):
+        return bool(self.children)
     
     # def __repr__(self):
     #     return f"AndExpr({self})"
@@ -378,6 +403,7 @@ class Columns(dict):
     
     joincond = AndExpr()
     groupbys = L()
+    foreign_keys = L()
     # primary = None
     
     def __init__(self, *args, **kwargs):
@@ -391,12 +417,20 @@ class Columns(dict):
             # pass            
         
         if attrname in self:
+            
+            # res = copy(self)
+            # for key, expr in self.items():
+                # del res[key]
+            
+            # res[attrname] = self[attrname]
+            
             res = Columns({attrname: self[attrname]})
             res.joincond = self.joincond
             res.groupbys = self.groupbys
             
-            for key, derived in L(*self.__dict__).filter(lambda x: '_saved' in x[0]):
-                res[key] = derived
+            # for key, derived in L(*self.__dict__.items()).filter(lambda x: '_saved' in x[0]):
+                # res[key] = derived
+            
             
             # def primary_getattr():
                 # return self.primary()
@@ -417,6 +451,14 @@ class Columns(dict):
     
     def __rshift__(self, func):
         return func(self)
+    
+    def primaryExpr(self):
+        res = self.getTables()[0].primaryExpr()
+        return Columns({None: res})
+    
+    @property
+    def p(self):
+        self.asQuery().p
     
     def findattr(self, attrname):
         try:
@@ -560,10 +602,10 @@ class Columns(dict):
         # these are all defined every ttime it's instantiate, which is bad design. Better to define once. 
         
         if primary:
-            
+            selfclass.primary = attrname
             self.primary = getattr(self, attrname)
             self.groupbys = L(self[attrname])
-        
+            
             @functions.injective()
             @rename(selfclass.__name__.lower())
             def primary_key_cols(self):
@@ -574,17 +616,18 @@ class Columns(dict):
             setattr(Columns, selfclass.__name__.lower(), primary_key_cols)
         
         if foreign:
+            selfclass.foreign_keys += attrname
             
             if ref is None: ref = foreign.__name__.lower()
             @functions.injective(ref)
             def primary_key(self):
-                return foreign.query().join(lambda x: getattr(x, 'primary') == getattr(self, attrname))
+                return foreign.query().join(lambda x: x.primaryExpr() == getattr(self, attrname))
             setattr(selfclass, ref, primary_key)
             
             if backref is None: backref = selfclass.__name__.lower() + 's'
             @functions.Kleisli
             def foreign_key(self, cond=None):
-                return selfclass.query().join(lambda x: getattr(x, attrname) == getattr(self, 'primary')).filter(cond)
+                return selfclass.query().join(lambda x: getattr(x, attrname) == self.primaryExpr()).filter(cond)
             setattr(foreign, backref, foreign_key.func)
             
             @functions.Kleisli

@@ -14,13 +14,16 @@ def asExpr(value):
     raise TypeError(f"Cannot convert to Expr: {value} of type {type(value)}")
 
 
+def labelResult(func, args):
+    return func.__name__.strip('_') + '_' + args.bind(lambda x: x.keys()).intersperse('_')
+
+
 def augment(func):
     # Columns -> Columns and Columns -> Query
-    # for functions that go to another table
     # all we want to do is lift func to something that carries through the joinconds and the groupbys
     # the complication is that we need it to addquery, or do we?
     @wraps(func)
-    def mfunc(*args, **kwargs):
+    def mfunc(*args, **kwargs):        
         
         res = func(*args, **kwargs)
         # if isinstance(res, Query): res = res.joinM()
@@ -28,51 +31,24 @@ def augment(func):
         colargs = L(*args).filter(lambda x: isinstance(x, Columns))
         oldgroupbys = colargs.bind(lambda x: x.groupbys)
         oldjc = colargs.fmap(lambda x: x.asQuery()).fold(lambda x, y: x | y)
-        
-        # if isinstance(res, Query):
-        # pretty sure thid gets handled by the joinM
-        #     rescols = res.columns
-        #     res @= colargs.fmap(lambda x: x.asQuery()).sum()
-        #     res.columns = rescols
-        # else:
-        
-        #     # rescols = res.clear()
-        #     res.joincond @= colargs.fmap(lambda x: x.asQuery()).sum().joincond
-        #     # res.__dict__.update(rescols)
-        
-        # res.groupbys += colargs.bind(lambda x: x.groupbys)
-        # if isinstance(res, Query):
-        #     res.groupbys -= res.columns.primary().values()
-        # else:                
-        #     res.groupbys -= res.primary().values()
-        # if isinstance(res, Query) and not res.groupbys:
-        #     res.groupbys += colargs.bind(lambda x: x.primary().values())
+        res.groupbys = oldgroupbys + res.groupbys
+        # res.joincond @= colargs.fmap(lambda x: x.asQuery()).combine()
         
         if isinstance(res, Columns):
             res = addQuery(oldjc, res.asQuery(), addcols='right').asCols()
             res = res.label(labelResult(func, colargs))
-        else:
+        else:            
             res = addQuery(oldjc, res.asQuery(), addcols='right')
             # this breaks things
             # res.columns = res.columns.label(func.__name__)
-        
-        res.groupbys = oldgroupbys + res.groupbys
-        
-        # argquery = colargs.fmap(lambda x: x.asQuery()).sum()
-        # res.joincond @= colargs.fmap(lambda x: x.asQuery()).sum()
         
         return res
     return mfunc
 
 
-def labelResult(func, args):
-    return func.__name__.strip('_') + '_' + args.bind(lambda x: x.keys()).intersperse('_')
-    
-
 def lift(func):
     """
-    Applicative instance for Columns
-    Lifts Expr -> Expr to Columns -> Columns
+    Lifts Expr -> Expr to Columns -> Columns. "Applicative instance for Columns"
     """
     @wraps(func)
     def colfunc(*args, **kwargs):
@@ -83,7 +59,9 @@ def lift(func):
         
         # replica of augment logic
         res.groupbys = colargs.bind(lambda x: x.groupbys)
-        res.joincond @= colargs.fmap(lambda x: x.asQuery()).combine()
+        # we're NOT using addQuery here
+        res.joincond &= colargs.fmap(lambda x: x.joincond).fold(lambda x, y: x & y)
+        # res.joincond @= colargs.fmap(lambda x: x.asQuery()).combine()
         # oldjc = colargs.fmap(lambda x: x.asQuery()).fold(lambda x, y: x @ y)
         # res = addQuery(oldjc, res.asQuery(), addcols='right').asCols()
         
@@ -109,10 +87,9 @@ def injective(fname=None):
             # another replica of augment
             res.groupbys = self.groupbys + res.groupbys
             res = addQuery(self.asQuery(), res.asQuery(), addcols='right').one
-            
             # res.joincond &= self.joincond
+            
             # STOP using primary as a way to track where the column came from, that's the role of the group bys
-            # res.groupbys -= res.primary().values()
             object.__setattr__(self, fname + '_saved', res)
             
             return res
@@ -135,6 +112,7 @@ def aggfunc(strfunc):
         return AggExpr(strfunc, *exprs, **kwargs)
     @wraps(strfunc)
     def qfunc(q0, colname=None, **kwargs):
+        q0 = copy(q0)
         if colname is not None:
             q0 = q0.fmap(lambda x: getattr(x, colname))
         elif len(q0.columns) > 1:
@@ -214,6 +192,8 @@ def __ne__(self, other):
     return BinOpExpr("!=", self, other)
 @lift
 def __add__(self, other):
+    if self.istime() and type(other) is ConstExpr and isinstance(other.value, int):
+        other = ConstExpr(timedelta(days = other.value))
     return BinOpExpr("+", self, other)
 @lift
 def __sub__(self, other):
@@ -329,9 +309,13 @@ def floor_(expr):
     return f"FLOOR({expr})"
 @sqlfunc
 def isnull_(expr):
+    if type(expr) is FuncExpr and expr.func.__name__ == "ifen_":        
+        return f'{expr.children[0]} IS NULL OR NOT {expr.children[1]}'
     return f"{expr} IS NULL"
 @sqlfunc
 def notnull_(expr):
+    if type(expr) is FuncExpr and expr.func.__name__ == "ifen_":        
+        return f'{expr.children[0]} IS NOT NULL AND {expr.children[1]}'
     return f"{expr} IS NOT NULL"
 @sqlfunc
 def least_(*exprs):
@@ -454,5 +438,4 @@ def between(self, bound, tlimit=None, ts='ts'):
 
 
 # %% ^━━━━━━━━━━━━━━━━━ OTHER FUNCTIONS ━━━━━━━━━━━━━━━━━━^
-
 

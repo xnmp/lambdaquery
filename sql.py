@@ -8,28 +8,36 @@ def tableGen(self, reduce=True):
     ljtables = alltables.filter(lambda x: x.leftjoin)
     
     res, remainingcond, addedtables, wheres, havings = '', copy(self.joincond), L(), L(), L()
+    cjed = {}
     
     while len(addedtables) < len(alltables):
+        
         for table in fulltables + ljtables - addedtables:
+            if cjed and table.leftjoin: break
             
             # get the properties that only depend on one table to put in the where clause
-            # if not table.leftjoin or not fulltables:
-            #     wheres += remainingcond._filter(table).children
-            # else:
-            wheres += remainingcond._filter(table).children.filter(lambda x: (x.iswhere or not table.leftjoin) and not x.isagg())
+            if table.leftjoin:
+                wheres += remainingcond.children.filter(lambda x: x.iswhere and not x.isJoin() and not x.isagg())
+            else:
+                wheres += remainingcond._filter(table).children.filter(lambda x: not x.isagg())
+            # wheres += remainingcond._filter(table).children.filter(lambda x: (x.iswhere or not table.leftjoin) and not x.isagg())
             havings += remainingcond.children.filter(lambda x: x.isagg())
             joins = remainingcond._filter(table, addedtables).children - wheres - havings
             
             if not addedtables:
                 res += f'\n{lastSeparator(res)}FROM {sql(table, reduce=reduce, subquery=True)}'
-            elif joins:
+            elif joins.filter(lambda x: x.isJoin()):
                 jointype = 'LEFT JOIN ' if table.leftjoin and fulltables else 'JOIN '
                 joinstr = str(AndExpr(joins)).replace('AND', '\n    AND')
                 res += f"\n  {jointype}{sql(table, reduce=reduce, subquery=True)} ON {joinstr}"
             else:
-                # if reduce: continue
-                res += f'\n  CROSS JOIN {sql(table, reduce=reduce, subquery=True)}'
+                if (table in cjed and cjed[table]) or not reduce:
+                    res += f'\n  CROSS JOIN {sql(table, reduce=reduce, subquery=True)}'
+                else:                    
+                    cjed[table] = True
+                    continue
             
+            cjed = {}
             remainingcond.children -= joins + wheres + havings
             addedtables.append(table)
     
@@ -64,19 +72,19 @@ def sql(self, display=True, reduce=True, subquery=False):
     if wheres: res += f'\n{lastSeparator(res)}WHERE ' + wheres.intersperse('\n    AND ')
     
     # ==GROUP BY...
-    # if self.isagg():
-    #     groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg()).len() + 1))
-    #     if subquery or not groupbys:
-    #         # don't incllude the groupbys if the outermost query is an aggregate, 
-    #         # because we're cheating with functions like count_
-    #         groupbys += (self.groupbys + havings.bind(Expr.baseExprs)).filter(lambda x: x not in exprs)
-    #     groupbys += havings.bind(Expr.havingGroups)
-    #     if groupbys:  
-    #         res += '\n\nGROUP BY ' + groupbys.intersperse(', ')
+    if self.isagg():
+        groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg()).len() + 1))        
+        if subquery or not groupbys:
+            # don't incllude the groupbys if the outermost query is an aggregate, 
+            # because we're cheating with functions like count_
+            groupbys += (self.groupbys + havings.bind(Expr.baseExprs)).filter(lambda x: x not in exprs)
+        groupbys += havings.bind(Expr.havingGroups)
+        if groupbys:
+            res += '\nGROUP BY ' + groupbys.intersperse(', ')
             
-    # for debugging
-    groupbys = self.groupbys + havings.bind(Expr.havingGroups)
-    res += f'\n{lastSeparator(res)}GROUP BY ' + groupbys.intersperse(', ')
+    # GROUP BY for debugging
+    # groupbys = self.groupbys + havings.bind(Expr.havingGroups)
+    # res += f'\n{lastSeparator(res)}GROUP BY ' + groupbys.intersperse(', ')
     
     # ==HAVING...
     if havings: res += f'\nHAVING ' + havings.intersperse('\n    AND ')

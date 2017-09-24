@@ -35,6 +35,12 @@ def rename(newname):
         return f
     return decorator
 
+def patch(pcls):
+    def decorator(func):
+        setattr(pcls, func.__name__, func)
+        return func
+    return decorator
+
 def listunion(*lists):
     if lists == (): return []
     lnew = []

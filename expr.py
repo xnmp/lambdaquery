@@ -1,6 +1,6 @@
-from misc import *
-import functions
-import query
+from LambdaQuery.misc import *
+import LambdaQuery.functions
+import LambdaQuery.query
 
 
 # need a way to connect the table to the default row - this will happen when we instantiate the row
@@ -14,6 +14,7 @@ class Table(object):
     limitvar = None
     
     # for rerouting, messy that it's here though
+    derivatives = L()    
     parents = L()
     tableclass = None
     instance = None
@@ -144,7 +145,7 @@ class Expr(object):
     
     def isPrimary(self):
         try:
-            return type(self) is BaseExpr and self.table.primarynames()[0] == self.fieldname
+            return type(self) is BaseExpr and self.fieldname in self.table.primarynames()
         except AttributeError:
             # this part is for distinct
             return self.getRef() in self.table.groupbys
@@ -494,7 +495,7 @@ class Columns(dict):
         return self.values()[0]
     
     def asQuery(self):
-        return query.Query(self.clear(), self.joincond, self.groupbys)
+        return LambdaQuery.query.Query(self.clear(), self.joincond, self.groupbys)
     
     def addCols(self, other):
         return (self.asQuery() + other.asQuery()).asCols()
@@ -606,7 +607,7 @@ class Columns(dict):
             self.primary = getattr(self, attrname)
             self.groupbys = L(self[attrname])
             
-            @functions.injective()
+            @LambdaQuery.functions.injective()
             @rename(selfclass.__name__.lower())
             def primary_key_cols(self):
                 # try:
@@ -619,18 +620,18 @@ class Columns(dict):
             selfclass.foreign_keys += attrname
             
             if ref is None: ref = foreign.__name__.lower()
-            @functions.injective(ref)
+            @LambdaQuery.functions.injective(ref)
             def primary_key(self):
                 return foreign.query().join(lambda x: x.primaryExpr() == getattr(self, attrname))
             setattr(selfclass, ref, primary_key)
             
             if backref is None: backref = selfclass.__name__.lower() + 's'
-            @functions.Kleisli
+            @LambdaQuery.functions.Kleisli
             def foreign_key(self, cond=None):
                 return selfclass.query().join(lambda x: getattr(x, attrname) == self.primaryExpr()).filter(cond)
             setattr(foreign, backref, foreign_key.func)
             
-            @functions.Kleisli
+            @LambdaQuery.functions.Kleisli
             def foreign_key_cols(self, cond=None):
                 # try:
                 jfield = (self.keys() ^ selfclass().keys())[0]

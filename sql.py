@@ -1,19 +1,20 @@
-from reroute import *
+from LambdaQuery.reroute import *
 
 
-def tableGen(self, reduce=True):
+def tableGen(self, reduce=True, debug=False):
     
     alltables = self.getTables()
-    fulltables = alltables.filter(lambda x: not x.leftjoin)
-    ljtables = alltables.filter(lambda x: x.leftjoin)
-    
+    fulltables = alltables.filter(lambda x: not x.leftjoin or x in self.groupbys.getTables())
+    ljtables = alltables.filter(lambda x: x.leftjoin and x not in self.groupbys.getTables())
+    # if reduce:
+        
     res, remainingcond, addedtables, wheres, havings = '', copy(self.joincond), L(), L(), L()
     cjed = {}
     
     while len(addedtables) < len(alltables):
         
         for table in fulltables + ljtables - addedtables:
-            if cjed and table.leftjoin: break
+            # if cjed and table.leftjoin: break
             
             # get the properties that only depend on one table to put in the where clause
             if table.leftjoin:
@@ -25,15 +26,18 @@ def tableGen(self, reduce=True):
             joins = remainingcond._filter(table, addedtables).children - wheres - havings
             
             if not addedtables:
-                res += f'\n{lastSeparator(res)}FROM {sql(table, reduce=reduce, subquery=True)}'
+                res += f'\n{lastSeparator(res)}FROM {sql(table, reduce=reduce, subquery=True, debug=debug)}'
             elif joins.filter(lambda x: x.isJoin()):
                 jointype = 'LEFT JOIN ' if table.leftjoin and fulltables else 'JOIN '
                 joinstr = str(AndExpr(joins)).replace('AND', '\n    AND')
-                res += f"\n  {jointype}{sql(table, reduce=reduce, subquery=True)} ON {joinstr}"
+                res += f"\n  {jointype}{sql(table, reduce=reduce, subquery=True, debug=debug)} ON {joinstr}"
             else:
                 if (table in cjed and cjed[table]) or not reduce:
-                    res += f'\n  CROSS JOIN {sql(table, reduce=reduce, subquery=True)}'
-                else:                    
+                    res += '\n  '
+                    if table.leftjoin: res += 'LEFT '
+                    res += f'CROSS JOIN {sql(table, reduce=reduce, subquery=True, debug=debug)}'
+                else:
+                    
                     cjed[table] = True
                     continue
             
@@ -48,12 +52,12 @@ def lastSeparator(self):
     return '\n' if len(self.split('\n  ')[-1]) > 200 else ''
 
 
-def sql(self, display=True, reduce=True, subquery=False):
+def sql(self, display=True, reduce=True, subquery=False, debug=False):
     
     # self = deepcopy(self)
     if type(self) is Table: return str(self)
-    if reduce: reduceQuery(self)
-        
+    if reduce: reduceQuery(self, debug=debug)
+    
     # if not subquery and reduce: relabel(self)
     
     selects = self.columns.items().sort(lambda x: x[1].isagg())
@@ -65,26 +69,27 @@ def sql(self, display=True, reduce=True, subquery=False):
     res = f'SELECT {selecttype1}\n  ' + selects.fmap(showSql).intersperse(', \n  ')
     
     # ==FROM...
-    joinstr, wheres, havings = tableGen(self, reduce=reduce)
+    joinstr, wheres, havings = tableGen(self, reduce=reduce, debug=debug)
     res += joinstr
     
     # ==WHERE...
     if wheres: res += f'\n{lastSeparator(res)}WHERE ' + wheres.intersperse('\n    AND ')
     
     # ==GROUP BY...
-    if self.isagg():
-        groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg()).len() + 1))        
-        if subquery or not groupbys:
-            # don't incllude the groupbys if the outermost query is an aggregate, 
-            # because we're cheating with functions like count_
-            groupbys += (self.groupbys + havings.bind(Expr.baseExprs)).filter(lambda x: x not in exprs)
-        groupbys += havings.bind(Expr.havingGroups)
-        if groupbys:
-            res += '\nGROUP BY ' + groupbys.intersperse(', ')
-            
+    # if not debug:
+    #     if self.isagg():
+    #         groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg()).len() + 1))        
+    #         if subquery or not groupbys:
+    #             # don't incllude the groupbys if the outermost query is an aggregate, 
+    #             # because we're cheating with functions like count_
+    #             groupbys += (self.groupbys + havings.bind(Expr.baseExprs)).filter(lambda x: x not in exprs)
+    #         groupbys += havings.bind(Expr.havingGroups)
+    #         if groupbys:
+    #             res += '\nGROUP BY ' + groupbys.intersperse(', ')
+    # else:
     # GROUP BY for debugging
-    # groupbys = self.groupbys + havings.bind(Expr.havingGroups)
-    # res += f'\n{lastSeparator(res)}GROUP BY ' + groupbys.intersperse(', ')
+    groupbys = self.groupbys + havings.bind(Expr.havingGroups)
+    res += f'\n{lastSeparator(res)}GROUP BY ' + groupbys.intersperse(', ')
     
     # ==HAVING...
     if havings: res += f'\nHAVING ' + havings.intersperse('\n    AND ')
@@ -102,5 +107,5 @@ def sql(self, display=True, reduce=True, subquery=False):
     
     return res
 
-import query
-query.Query.sql = sql
+import LambdaQuery.query
+LambdaQuery.query.Query.sql = sql

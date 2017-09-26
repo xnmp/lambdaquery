@@ -1,5 +1,5 @@
-from expr import *
-from do_notation import *
+from LambdaQuery.expr import *
+from LambdaQuery.do_notation import *
 
 class Query(Table, Monad):
     
@@ -116,7 +116,7 @@ class Query(Table, Monad):
         return self.allExprs().getTables()
     
     def isagg(self):
-        return self.columns.values().filter(lambda x: x.isagg()).any()
+        return (self.columns.values() + self.joincond).filter(lambda x: x.isagg()).any()
     
     def asQuery(self):
         # ALWAYS RETURN A GODDAMN COPY
@@ -150,6 +150,11 @@ class Query(Table, Monad):
         for k, v in self.columns.__dict__.items():
             if '_saved' in k:
                 res += v.getTables()
+        
+        # ALSO: any table that's joined to it or its dependents, 
+        # and which isn't something that is a dependent of something before it in the groupby list
+        res += self.columns.getTables().bind(lambda x: x.derivatives)
+        
         return res
     
     
@@ -161,6 +166,11 @@ class Query(Table, Monad):
         for gpbyexpr in reversed(self.groupbys):
             if gpbyexpr.isPrimary() and gpbyexpr.table == grouptable:
                 self.groupbys.pop()
+            elif gpbyexpr.table == grouptable:
+                self.groupbys.pop()
+                break
+            else:
+                break
             # elif self.columns.values().filter(lambda x: x.isagg()).getTables() <= 
             # elif gpbyexpr.isPrimary():
                 # break
@@ -237,12 +247,11 @@ class Query(Table, Monad):
         # return lens.columns.modify(lambda x: ffunc(x, *args, **kwargs))(self).joinM()
     
     
-    def exists(self):
-        
-        res = self.lj().asCols().firstCol().notnull_().one
-        
-        return res
+    def exists(self):        
+        return self.lj().asCols().firstCol().notnull_().one
     
+    def notExists(self):
+        return ~self.exists()
     
     def groupby(self, exprlist=None):
         if not self.groupbys and exprlist is None:
@@ -276,9 +285,13 @@ class Query(Table, Monad):
     
     @classmethod
     def unit(cls, *args, filter=None, limit=None, sort=None, **kwargs):
-        # aa = args[0].asQuery()
-        # bb = args[1].asQuery()
-        # hh = addQuery(aa, bb)
+        try:
+            aa = args[0].asQuery()
+            bb = args[1].asQuery()
+            hh = addQuery(aa, bb)
+            
+        except:
+            pass
         
         kwargs = L(*kwargs.items()).fmap(lambda x: x[1].label(x[0]))
         res = L(*args, *kwargs).fmap(lambda x: x.asQuery()).fold(lambda x, y: x @ y)
@@ -350,8 +363,12 @@ class Query(Table, Monad):
     
     
     def lj(self):
-        # a question: should subqueries be left joined?
         res = copy(self)
+        
+        # if res.columns.getTables() <= res.groupbys.getTables():
+        #     # a question: should subqueries be left joined? only if it's one of the base tables
+        #     res.leftjoin = True            
+        #     return res
         
         ljtables = res.columns.getTables() + self.dependents()
         for tab in ljtables:
@@ -369,7 +386,6 @@ class Query(Table, Monad):
                 rescolumns = copy(res.columns)
                 rescolumns[key] = Expr._ifen_(expr, AndExpr(notnullcond))
                 res.columns = rescolumns
-                
         return res
 
 
@@ -403,7 +419,6 @@ def addQuery(self, other, addcols='both'):
     
     # # start with the ones that are in common:
     # for tab1 in jtables:
-        
     #     cond0 = res.joincond._filter(tab1, jtables)
     #     cond1 = other.joincond._filter(tab1, jtables)
     #     if cond1 - cond0 and (cond0 | cond1).children.filter(lambda x: x.isJoin()):
@@ -427,6 +442,7 @@ def addQuery(self, other, addcols='both'):
     #         jtables += L(tab1)
     #         res.joincond &= cond1
     
+    # short circuit it
     res.joincond &= other.joincond
     
     if addcols == 'both':
@@ -441,8 +457,7 @@ def identifyTable(cond0, cond1, tab0, tab1):
     # tab1 and tab0 are both joined to the same table by the same thing
     
     # short circuit it if we want it to be no frills
-    
-    return False
+    # return False
     
     andcond = cond0 & cond1
     

@@ -1,5 +1,5 @@
 from functools import wraps
-from query import *
+from LambdaQuery.query import *
 
 
 def asExpr(value):
@@ -23,7 +23,7 @@ def augment(func):
     # all we want to do is lift func to something that carries through the joinconds and the groupbys
     # the complication is that we need it to addquery, or do we?
     @wraps(func)
-    def mfunc(*args, **kwargs):        
+    def mfunc(*args, **kwargs):
         
         res = func(*args, **kwargs)
         # if isinstance(res, Query): res = res.joinM()
@@ -31,12 +31,17 @@ def augment(func):
         colargs = L(*args).filter(lambda x: isinstance(x, Columns))
         oldgroupbys = colargs.bind(lambda x: x.groupbys)
         oldjc = colargs.fmap(lambda x: x.asQuery()).fold(lambda x, y: x | y)
+        
+        if isinstance(res, Query) and type(res.columns) is not Columns:            
+            for table in oldgroupbys.getTables():
+                table.derivatives += res.columns.getTables()[0]
+        
         res.groupbys = oldgroupbys + res.groupbys
         # res.joincond @= colargs.fmap(lambda x: x.asQuery()).combine()
         
         if isinstance(res, Columns):
-            res = addQuery(oldjc, res.asQuery(), addcols='right').asCols()
-            res = res.label(labelResult(func, colargs))
+            res = addQuery(oldjc, res.asQuery(), addcols='right').asCols()            
+            if type(res) is Columns: res = res.label(labelResult(func, colargs))
         else:            
             res = addQuery(oldjc, res.asQuery(), addcols='right')
             # this breaks things
@@ -86,13 +91,18 @@ def injective(fname=None):
             
             # another replica of augment
             res.groupbys = self.groupbys + res.groupbys
+            
+            if type(res.columns) is not Columns:
+                for table in res.groupbys.getTables():
+                    table.derivatives += res.columns.getTables()[0]
+            
             res = addQuery(self.asQuery(), res.asQuery(), addcols='right').one
             # res.joincond &= self.joincond
             
             # STOP using primary as a way to track where the column came from, that's the role of the group bys
             object.__setattr__(self, fname + '_saved', res)
-            
             return res
+        setattr(Columns, func.__name__, colfunc)
         return colfunc
     return decorator
 
@@ -424,7 +434,8 @@ def between(self, bound, tlimit=None, ts='ts'):
         else:
             raise AttributeError(f"No timestamp in {self}")
     
-    if isinstance(tlimit, Columns) or isinstance(tlimit, str):
+    
+    if isinstance(tlimit, Columns) or isinstance(tlimit, str) or isinstance(tlimit, dt.datetime):
         return (tsvar > bound) & (tsvar < tlimit)
     elif isinstance(tlimit, int):
         if tlimit > 0:
@@ -434,7 +445,7 @@ def between(self, bound, tlimit=None, ts='ts'):
             tlimit = timedelta(days=-tlimit)
             return (tsvar < bound) & (tsvar > bound - tlimit)
     else:
-        return TypeError("Between func: invalid upper limit")
+        raise TypeError("Between func: invalid upper limit")
 
 
 # %% ^━━━━━━━━━━━━━━━━━ OTHER FUNCTIONS ━━━━━━━━━━━━━━━━━━^

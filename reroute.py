@@ -1,5 +1,5 @@
-from expr import *
-from misc import *
+from LambdaQuery.expr import *
+from LambdaQuery.misc import *
 from itertools import product
 
 
@@ -85,7 +85,7 @@ def canMoveOut(table, inner, outer):
     
     # NEW: just move if it's either an outer groupby or joined to an outer groupby, and the same is not true for inner
     willmove = table in outer.groupbys.getTables() + outer.getTables().filter(lambda x: x.isJoined(outer.joincond.children))
-    isgroupedinner = table in inner.groupbys.getTables() + inner.getTables().filter(lambda x: x.isJoined(inner.joincond.children))
+    isgroupedinner = table in inner.groupbys.getTables() #+ inner.getTables().filter(lambda x: x.isJoined(inner.joincond.children))
     
     # can't move out anything that appears in an agg expr
     canmove = not inner.allExprs().filter(lambda x: x.isagg()).getTables()\
@@ -311,7 +311,7 @@ def reroute(expr, basetable, target):
                 # add it as a groupby if it's not already
                 target.groupbys += expr.table.primaryExpr()
             
-        print("REROUTED():", expr)
+        # print("REROUTED():", expr)
         
         return BaseExpr(dummylabel, target)
     elif not expr.getTables() ^ target.getTables():
@@ -330,7 +330,7 @@ def moveIn(expr, inner, outer):
     outer.joincond.children -= expr
 
 
-def moveInAll(inner, outer):
+def moveInAll(inner, outer, debug=False):
     """
     the loop is to account for the case when a table isn't joined by primary key, 
     but it's joined to somethaing that's joined by primary key 
@@ -341,12 +341,14 @@ def moveInAll(inner, outer):
         for expr in outer.joincond.children:
             if canMoveIn(expr, inner, outer):
                 finish = False
-                moveIn(expr, inner, outer)
-                print("MOVED_IN():", expr)
-                print(outer.sql(reduce=False))
+                moveIn(expr, inner, outer)                
+                if debug:
+                    print("MOVED_IN():", expr)
+    if debug:
+        print(outer.sql(reduce=False))
     
 
-def moveInHaving(inner, outer):    
+def moveInHaving(inner, outer, debug=False):    
     # move in the HAVING conditions, this facilitates a cleanup later on
     # move it in if the inner query is the only one of its tables.
     
@@ -356,8 +358,9 @@ def moveInHaving(inner, outer):
         # TODO: the descendants of havingexpr are already grouped by
         # havingexpr.descendants.getTables() <= inner.groupbys
         
-        print("MOVED_IN():", havingexpr)
-        print(outer.sql(reduce=False))
+        if debug:
+            print("MOVED_IN():", havingexpr)
+            print(outer.sql(reduce=False))
         
         inner.joincond.children += havingexpr
         outer.joincond.children -= outexpr
@@ -391,7 +394,7 @@ def mergeGrouped(self):
     for tablegroup in alltablegroups:
         # merged = tablegroup.combine()
         
-        merged = tablegroup.fold(lambda x, y: x | y)
+        merged = tablegroup.fold(lambda x, y: x @ y)
         self.setSource(merged, oldtable=tablegroup)
         
         # print(self.sql(reduce=False))
@@ -451,7 +454,7 @@ def connectTables(table):
 
 # %% ^━━━━━━━━━━━━━━━━━━━━━━━ REDUCE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^
 
-def reduceQuery(self):
+def reduceQuery(self, debug=False):
     """
     make everything appear in scope - the dependency graph has to be a tree
     this means we have to redirect everything via its aggregate queries
@@ -461,26 +464,30 @@ def reduceQuery(self):
     # while not finish:
     #     finish = True
     
-    print(' # %% ^━━━━━━━━━━━━━━━━━ REDUCING... ━━━━━━━━━━━━━━━━━━━━━━━━^ ')
-    print(self.sql(reduce=False))    
+    if debug:
+        print(' # %% ^━━━━━━━━━━━━━━━━━ REDUCING... ━━━━━━━━━━━━━━━━━━━━━━━━^ ')
+        print(self.sql(reduce=False))        
     
     # STEP 1: MERGE SUBQUERIES WITH THE SAME GROUP BYS
     selfcopy = copy(self)
     mergeGrouped(self)
     if str(selfcopy.__dict__) != str(self.__dict__):
-        print(' # %% ^━━━━━━━━━━━━━━━━━ AFTER MERGING ━━━━━━━━━━━━━━━━━━━^ ')
-        print(self.sql(reduce=False))
-        print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
+        if debug:
+            print(' # %% ^━━━━━━━━━━━━━━━━━ AFTER MERGING ━━━━━━━━━━━━━━━━━━━^ ')
+            print(self.sql(reduce=False))
+            print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
     else:
-        print("NO TABLES MERGED")
+        if debug:
+            print("NO TABLES MERGED")
     if not self.subQueries():
-        print("NOTHING TO REDUCE... DONE")
-        print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
+        if debug:
+            print("NOTHING TO REDUCE... DONE")
+            print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
         return
     
     # STEP 2: MOVING IN
     for newtable in self.subQueries():
-        moveInAll(inner=newtable, outer=self)
+        moveInAll(inner=newtable, outer=self, debug=debug)
     
     # for table in self.getTables():
     #     newtable = self.subQueries()[0]
@@ -501,13 +508,12 @@ def reduceQuery(self):
                 if canMoveOut(table, inner=newtable, outer=self):
                     # finish = False
                     moveOut(table, inner=newtable, outer=self)
-                    
-                    print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
-                    print("MOVEOUT", table)
-                    print(self.sql(reduce=False))
-                    print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')    
+                    if debug:
+                        print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
+                        print("MOVEOUT", table)
+                        print(self.sql(reduce=False))
+                        print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')    
                     moveout = True
-                    import pdb; pdb.set_trace()  # breakpoint 0b3a9ad1 //
                     
                     break
             if moveout:
@@ -519,7 +525,8 @@ def reduceQuery(self):
         newtable = (table.parents - self)[0]
         if canRerouteTable(table, inner=newtable, outer=self): continue
         
-        print("COPY TABLE", table)
+        if debug:
+            print("COPY TABLE", table)
         
         copyJoinconds(table, newtable, self)
         copyTable(table, self, addcond=False)
@@ -527,16 +534,18 @@ def reduceQuery(self):
     
     # STEP 5: ACTUALLY REROUTE
     for table in getRerouteTables(self):
-        print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
-        print("REROUTE", table)
+        if debug:
+            print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
+            print("REROUTE", table)
         for newtable in table.parents - self:
             rerouteAll(table, inner=newtable, outer=self)
-        print(self.sql(reduce=False))
-        print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
+        if debug:
+            print(self.sql(reduce=False))
+            print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
     
     # STEP 6: MOVE IN THE "HAVING" EXPRS
-    for newtable in self.subQueries():
-        moveInHaving(inner=newtable, outer=self)
+    # for newtable in self.subQueries():
+    #     moveInHaving(inner=newtable, outer=self)
     
     # STEP 7: CONNECT THE DISJOINTED TABLES
     addParents(self, reset=True, debug=True)
@@ -546,20 +555,23 @@ def reduceQuery(self):
     
     # STEP 8: REDUCE CHILDREN
     for subtable in self.subQueries():
-        reduceQuery(subtable)
+        reduceQuery(subtable, debug=debug)
     
     # STEP 9: CLEAN UP REDUNDANT OUTERMOST QUERY
     if canCleanUp(self):
         cleanUp(self)
-        print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
-        print("CLEANED UP...")
-        print(self.sql(reduce=False))
-        print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
+        if debug:
+            print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
+            print("CLEANED UP...")
+            print(self.sql(reduce=False))
+            print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
     
     # # STEP 10: REPEAT IF THERE'S STILL MORE TO DO
     # if getRerouteTables(self):
-    #     print("REDUCING AGAIN")
-    #     reduceQuery(self)
+        # if debug:
+        #     print("REDUCING AGAIN")
+        #     reduceQuery(self)
     
-    print("FINISHED REDUCING")
-    print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
+    if debug:
+        print("FINISHED REDUCING")
+        print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')

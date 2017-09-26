@@ -1,7 +1,8 @@
 # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^
 
-from tables import *
-# from other_functions import *
+from LambdaQuery.tables import *
+from LambdaQuery.sql import *
+from LambdaQuery.other_functions import *
 
 import pandas as pd
 import numpy as np
@@ -421,8 +422,8 @@ def predictwith(self, target=None, features=[], models=[], retrain=True, fcond=N
         
         from lightgbm import LGBMClassifier
         from xgboost import XGBClassifier, XGBRegressor
-        # clf = LGBMClassifier()#is_unbalance=True)
-        clf = XGBClassifier()#scale_pos_weight=879/121)
+        clf = LGBMClassifier()#is_unbalance=True)
+        # clf = XGBClassifier()#scale_pos_weight=879/121)
         clf.fit(X, y)
         self.model = clf
     

@@ -5,16 +5,14 @@ from datetime import timedelta
 @Lifted
 def abvar(u0, test=None, lj=True, activation=False, after=True):
     timevar = 'active_ts' if activation else 'ts'
-    testquery = u0.uid.abtests(lambda x: (x.test == test) 
-                               & x.halt_ts.isnull_()
-                               )
+    testquery = u0.uid.abtests(lambda x: (x.test == test))
     if after:
-        testquery = testquery.filter(lambda x: getattr(x, timevar) < u0.ts)
+        testquery = testquery.filter(lambda x: (getattr(x, timevar) < u0.ts) & x.halt_ts.isnull_())
     if lj:
         testquery = testquery.lj()
     else:
         testquery = testquery.filter(lambda x: x.user.good)
-    return testquery.one.variation.coalesce_('no-variation')
+    return testquery.one.variation.coalesce_('No_Variation')
 
 @injective()
 def mem(self): #contains a uid and a ts
@@ -58,6 +56,7 @@ def last_before(self, action_table, cond=None, on=None):
                 & getattr(base, action_table)()\
                   .filter(cond)\
                   .filter(lambda y: y.between(x.ts, self.ts))\
+                  # .groupby(x.primary)
                   .notExists()
                 ).lj().one
     return res

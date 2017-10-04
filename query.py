@@ -5,10 +5,11 @@ class Query(Table, Monad):
     
     alias = 'query'
     
-    def __init__(self, columns, joincond=AndExpr(), groupbys=L()):
+    def __init__(self, columns, joincond=AndExpr(), groupbys=L(), leftjoin=False):
         self.columns = columns
         self.joincond = joincond
         self.groupbys = groupbys
+        self.leftjoin = leftjoin
     
     def __repr__(self):
         return f"Query(columns= {self.columns}, \n      joincond= {self.joincond}, \n      groupbys= {self.groupbys}, \n      memloc= '{memloc(self)}')"
@@ -47,6 +48,9 @@ class Query(Table, Monad):
         res.columns %= other.columns
         res.groupbys += other.groupbys
         return res
+    
+    def __getitem__(self, col):
+        return self.fmap(lambda x: getattr(x, col))
     
     def getPrimary(self):
         for key, expr in self.columns.items():
@@ -118,6 +122,9 @@ class Query(Table, Monad):
     def isagg(self):
         return (self.columns.values() + self.joincond).filter(lambda x: x.isagg()).any()
     
+    def isOuter(self):
+        return self.subQueries().exists()
+    
     def asQuery(self):
         # ALWAYS RETURN A GODDAMN COPY
         return copy(self)
@@ -153,10 +160,12 @@ class Query(Table, Monad):
         
         # ALSO: any table that's joined to it or its dependents, 
         # and which isn't something that is a dependent of something before it in the groupby list
-        res += self.columns.getTables().bind(lambda x: x.derivatives)
+        res += (self.columns.getTables()).bind(lambda x: x.derivatives)
         
         return res
     
+    def queryTables(self):
+        return (self.columns.getTables() + self.groupbys.getTables()).bind(lambda x: L(x) + x.derivatives)
     
     def ungroupby(self):
         # MUTATES
@@ -165,9 +174,13 @@ class Query(Table, Monad):
         
         for gpbyexpr in reversed(self.groupbys):
             if gpbyexpr.isPrimary() and gpbyexpr.table == grouptable:
-                self.groupbys.pop()
+                selfgroupbys = copy(self.groupbys)
+                selfgroupbys.pop()
+                self.groupbys = selfgroupbys
             elif gpbyexpr.table == grouptable:
-                self.groupbys.pop()
+                selfgroupbys = copy(self.groupbys)
+                selfgroupbys.pop()
+                self.groupbys = selfgroupbys
                 break
             else:
                 break
@@ -210,17 +223,11 @@ class Query(Table, Monad):
                 res[key] = BaseExpr(key, source)
             res.groupbys = res.values()
         else:
-            res.groupbys = source.groupbys
             for key, expr in res.items():
                 res[key] = BaseExpr(expr.fieldname, source)
             source.columns = BaseExpr('*', source.columns.getTables()[0]).asCols()
-        
-        # oldgroupbytables = self.groupbys.bind(lambda x: x.fmap(lambda y: y.getTables()))
-        # oldgroupbytables = self.groupbys.getTables()
-        res = Query.unit(res)
-        
-        # res.groupbys = self.groupbys.fmap(lambda x: x.setSource(res, oldgroupbytables))
-        return res
+            res.groupbys = source.groupbys.fmap(lambda x: x.setSource(source, x.getTables()))
+        return Query.unit(res)
     
     
     def sample(self, n=1000):
@@ -247,11 +254,30 @@ class Query(Table, Monad):
         # return lens.columns.modify(lambda x: ffunc(x, *args, **kwargs))(self).joinM()
     
     
-    def exists(self):        
-        return self.lj().asCols().firstCol().notnull_().one
+    def exists(self, col=False, _func='notnull_'):
+        
+        alias = self.columns.__class__.__name__.lower()
+        
+        # # as a subquery (shouldn't be able to move into the subquery here)
+        # res = self.lj().fmap(lambda x: x.firstCol())
+        # res.alias = alias
+        # res.ungroupby()
+        # expr = Expr._notnull_(BaseExpr(res.columns.keys()[0], res))
+        # res = Columns({'exists_' + alias: expr})
+        # return res
+        
+        # as an exists expr
+        # return ExistsExpr(self).asCols()
+        
+        # as a straight up (screws up one-to-one ness)
+        res = getattr(self.lj().asCols().firstCol(), _func)().one.label('exists_' + alias).setExists()
+        return res
+        
+        # as a bool any
+        # return self.lj().fmap(lambda x: x.firstCol()).any()
     
     def notExists(self):
-        return ~self.exists()
+        return self.exists(_func='isnull_')
     
     def groupby(self, exprlist=None):
         if not self.groupbys and exprlist is None:
@@ -288,8 +314,7 @@ class Query(Table, Monad):
         try:
             aa = args[0].asQuery()
             bb = args[1].asQuery()
-            hh = addQuery(aa, bb)
-            
+            hh = addQuery(aa, bb)    
         except:
             pass
         
@@ -308,6 +333,7 @@ class Query(Table, Monad):
         res = copy(self.columns) if makecopy else self.columns
         res.joincond = self.joincond
         res.groupbys = self.groupbys
+        # res.leftjoin = self.leftjoin
         return res
         # return self.columns >> lens.joincond.set(self.joincond) & lens.groupbys.set(self.groupbys)
     
@@ -316,10 +342,6 @@ class Query(Table, Monad):
     def one(self):
         res = self.asCols()
         resgroupbys = copy(res.groupbys)
-        
-        # for parent in resgroupbys[-1].getTables()[0].getDept(self.joincond.children):
-        #     parent.dependents += resgroupbys[-1].getTables()[0]
-        
         resgroupbys.pop()
         res.groupbys = resgroupbys
         return res
@@ -358,16 +380,12 @@ class Query(Table, Monad):
         return res.joinM()
     
     
-    # def joinOn(self, cond=None):
-    #     return self.filter(cond=cond)
-    
-    
     def lj(self):
         res = copy(self)
         
         # if res.columns.getTables() <= res.groupbys.getTables():
         #     # a question: should subqueries be left joined? only if it's one of the base tables
-        #     res.leftjoin = True            
+        #     res.leftjoin = True
         #     return res
         
         ljtables = res.columns.getTables() + self.dependents()
@@ -380,25 +398,25 @@ class Query(Table, Monad):
         
         # tricky part with dependent tables
         # if ifcond:
-        if res.dependents():            
-            notnullcond = res.dependents().fmap(lambda x: Expr._notnull_(x.primaryExpr()))
+        
+        depts = res.dependents().filter(lambda x: x in res.getTables())
+        if depts:
+            notnullcond = depts.fmap(lambda x: Expr._notnull_(x.primaryExpr()))
             for key, expr in self.columns.items():
                 rescolumns = copy(res.columns)
                 rescolumns[key] = Expr._ifen_(expr, AndExpr(notnullcond))
                 res.columns = rescolumns
         return res
-
-
-    @property
-    def p(self):
-        print(self.sql(reduce=False))
-        
     
-    # explicit group by
     def groupbyExplicit(self, *args):
-        return self.groupby(*L(*args)\
-                   .fmap(lambda x: x(self.columns).values() if hasattr(x, '__call__') else x.values()))
-
+        # explicit group by - add it one level back
+        newgroups = L(*args).bind(lambda x: x(self.columns).values() if hasattr(x, '__call__') else x.values())
+        res = copy(self)
+        res.ungroupby()
+        res.groupbys += newgroups + (self.groupbys - res.groupbys)
+        # res.groupbys = newgroups + res.groupbys
+        return res
+    
 # class FixedTable(Table):
 #     def __init__(self, q0):
 #         self.query = q0
@@ -417,33 +435,36 @@ def addQuery(self, other, addcols='both'):
     tables0, tables1 = self.joincond.getTables(), other.joincond.getTables()
     jtables = tables0 & tables1
     
-    # # start with the ones that are in common:
+    # start with the ones that are in common:
     # for tab1 in jtables:
     #     cond0 = res.joincond._filter(tab1, jtables)
     #     cond1 = other.joincond._filter(tab1, jtables)
     #     if cond1 - cond0 and (cond0 | cond1).children.filter(lambda x: x.isJoin()):
     #         moveJoins(cond0, cond1, tab1, tab1, res, other)
     
-    # # now for the ones that AREN'T in common:
-    # skiptable = False
-    # for tab1 in tables1 - tables0:
-    #     cond1 = other.joincond._filter(tab1, jtables)
-    #     for tab0 in tables0.filter(lambda x: x.__dict__ == tab1.__dict__):
-    #         cond0 = res.joincond._filter(tab0, jtables)
-    #         if identifyTable(cond0, cond1, tab0, tab1) and \
-    #             (tab0 not in res.groupbys.getTables() 
-    #              or (res.groupbys.fmap(lambda x: x.setSource(tab1, tab0)) == other.groupbys)):
+    # now for the ones that AREN'T in common:
+    skiptable = False
+    for tab1 in tables1 - tables0:
+        cond1 = other.joincond._filter(tab1, jtables)
+        for tab0 in tables0.filter(lambda x: x.isEq(tab1)):
+            cond0 = res.joincond._filter(tab0, jtables)
+            
+            if identifyTable(cond0, cond1, tab0, tab1, res, other) and \
+                (tab0 not in res.groupbys.getTables() 
+                 or (res.groupbys.fmap(lambda x: x.setSource(tab1, tab0)) == other.groupbys)):
                 
-    #             moveJoins(cond0, cond1, tab0, tab1, res, other)
-    #             skiptable = True
-    #             jtables += L(tab0)
-    #             break
-    #     if not skiptable:
-    #         jtables += L(tab1)
-    #         res.joincond &= cond1
+                moveJoins(cond0, cond1, tab0, tab1, res, other)
+                # other.setSource(tab0, tab1)
+                
+                skiptable = True
+                jtables += L(tab0)
+                break
+        if not skiptable:
+            jtables += L(tab1)
+            res.joincond &= cond1
     
     # short circuit it
-    res.joincond &= other.joincond
+    # res.joincond &= other.joincond
     
     if addcols == 'both':
         res.columns %= other.columns
@@ -453,20 +474,24 @@ def addQuery(self, other, addcols='both'):
     return res
 
 
-def identifyTable(cond0, cond1, tab0, tab1):
+def identifyTable(cond0, cond1, tab0, tab1, res, other):
     # tab1 and tab0 are both joined to the same table by the same thing
+    # the extras are just where conds
     
-    # short circuit it if we want it to be no frills
-    # return False
+    # cond0 = res.joincond._filter(tab0, other.joincond.getTables())
+    # cond1 = other.joincond._filter(tab1, res.joincond.getTables())
     
     andcond = cond0 & cond1
+    
+    cond1 = cond1.setSource(tab0, tab1)
+    leftover0 = cond0 - cond1
+    leftover1 = cond1 - cond0
     
     for expr0 in andcond.baseExprs().filter(lambda x: (x.table == tab0)):# & x.isPrimary()):
         for expr1 in andcond.baseExprs().filter(lambda x: (x.table == tab1)):# & x.isPrimary()):
             if expr0.fieldname == expr1.fieldname:
-                if expr0.getEqs(andcond) ^ expr1.getEqs(andcond):
-                    # if tab1 is not tab0:        
-                    return True
+                if expr0.getEqs(andcond) ^ expr1.getEqs(andcond):                    
+                    return leftover0.getTables() <= L(tab0) and leftover1.getTables() <= L(tab0) + other.getTables()
     return False
 
 
@@ -475,9 +500,12 @@ def moveJoins(cond0, cond1, tab0, tab1, res, other):
     # given two conditions, replace the tables, or them, and add the joinconds to tab0 and tab1
     # subtract the joinconds and add remainders to case whens in the selects
     
+    jtables = res.joincond.getTables() & other.joincond.getTables()
+    
     other.setSource(tab0, tab1)
+    # cond1.setSource(tab0, tab1)
     # res.setSource(tab0, tab1)
-    cond1 = cond1.setSource(tab0, tab1)
+    cond1 = other.joincond._filter(tab0, jtables)
     leftover0 = cond0 - cond1
     leftover0.children = leftover0.children.filter(lambda x: not x.isJoin())
     leftover1 = (cond1 - cond0)
@@ -491,7 +519,7 @@ def moveJoins(cond0, cond1, tab0, tab1, res, other):
         res.modify(lambda x: addJoins(x, leftover0), 'columns')
         res.joincond >>= lens.children.modify(lambda x: x - leftover0.children)
     
-    if leftover1.children:
+    if leftover1.children:# <= 1:
         other.modify(lambda x: addJoins(x, leftover1), 'columns')
         other.joincond >>= lens.children.modify(lambda x: x - leftover1.children)
     

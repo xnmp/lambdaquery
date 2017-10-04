@@ -39,7 +39,13 @@ class Table(object):
     #     del copy2['instance']
     #     return copy1 == copy2
     
-    
+    def isEq(self, other):
+        if self.isTable() and other.isTable():
+            return self.tablename == other.tablename and self.leftjoin == other.leftjoin
+        if not self.isTable() and not other.isTable():
+            return self.columns == other.columns and self.joincond == other.joincond \
+                and self.groupbys == other.groupbys and self.leftjoin == other.leftjoin
+        return False
     
     @property
     def abbrev(self):
@@ -63,7 +69,6 @@ class Table(object):
     
     def primarynames(self):
         return self.tableclass().groupbys.fmap(lambda x: x.fieldname)
-        # return self.tableclass().groupbys[0].fieldname
     
     def primaryExpr(self):
         return BaseExpr(self.primarynames()[0], self)
@@ -100,7 +105,7 @@ class Expr(object):
     
     def __repr__(self):
         return f"{self.table.abbrev}.{self.fieldname}"
-        
+    
     def __eq__(self, other):
         return str(self) == str(other)
         
@@ -150,6 +155,9 @@ class Expr(object):
             # this part is for distinct
             return self.getRef() in self.table.groupbys
     
+    def isExist(self):
+        return (L(self) + self.descendants()).fmap(lambda x: isinstance(x, FuncExistsExpr)).any()
+    
     def getPrimary(self):
         self.table.primarynames()
         return Columns({self.table.primarynames()[0] == self.fieldname})
@@ -158,10 +166,10 @@ class Expr(object):
         return self.children.getTables()
     
     def asCols(self):
-        return Columns({None: self})
+        return Columns({'': self})
     
     def asQuery(self):
-        return query.Query(Columns(), AndExpr(self.getAnds()))
+        return LambdaQuery.query.Query(Columns(), AndExpr(self.getAnds()))
     
     def addExpr(self, other):
         return (self.asQuery() + other.asQuery()).joincond
@@ -215,10 +223,15 @@ class Expr(object):
     def isagg(self):
         return self.children.filter(lambda x: x.isagg()).any()
     
-    def istime(self):
-        return type(self) is BaseExpr and 'time' in self.fieldname
+    def isTime(self):
+        return (type(self) is BaseExpr and ('time' in self.fieldname or 'date' in self.fieldname)) \
+            or (type(self) is BaseExpr and type(self.table) is not Table and self.getRef().isTime()) \
+            or isinstance(self, FuncExpr) and self.children.fmap(lambda x: x.isTime()).all()
     
-    
+    def isJoin2(self):
+        return isinstance(self, BinOpExpr) and self.func.__name__ in ['=','<','>','<=','>='] \
+            and self.children[0].getTables() != self.children[1].getTables() \
+            and self.children[0].getTables() and self.children[1].getTables()
     
     def getEqs(self, jc):
         res = L()
@@ -231,6 +244,13 @@ class Expr(object):
     
     # def setSource(self, newtable, oldtable=None):
     #     return self.fmap(lambda x: x.setSource(newtable, oldtable))
+    
+    def andrepr(self):
+        if type(self) is BaseExpr:
+            return f'{self} = TRUE'
+        if type(self) is FuncExpr and self.func.__name__ == '__invert__' and type(self.children[0]) is BaseExpr:
+            return f'{self.children[0]} = FALSE'
+        return repr(self)
     
     @baseFunc
     def setSource(self, newtable, oldtable):        
@@ -352,8 +372,10 @@ class BinOpExpr(FuncExpr):
         if self.func.__name__ in ['='] and isinstance(other, BinOpExpr):
             return self.func.__name__ == other.func.__name__ \
                 and self.children.sort(lambda x: str(x)) == other.children.sort(lambda x: str(x))
-        else:
+        elif isinstance(other, BinOpExpr):
             return self.__dict__ == other.__dict__
+        else:
+            return False
 
 
 class EqExpr(BinOpExpr):
@@ -400,10 +422,54 @@ class SubQueryExpr(Expr):
         return f'({self.subquery.sql(display=False)})'
 
 
+class FuncExistsExpr(FuncExpr):
+    def __init__(self, expr):
+        self.__dict__.update(expr.__dict__)
+
+
+class ExistsExpr(Expr):
+    def __init__(self, query=None, expr=None):
+        alias = query.columns.__class__.__name__.lower()
+        res = copy(query)
+        resjc = copy(res.joincond)
+        resjc.children = resjc.children.filter(lambda x: x.getTables() ^ (res.columns.getTables() + res.dependents()))
+        res.joincond = resjc
+        res.alias = alias
+        res.ungroupby()
+        self.tables = res.groupbys[-1].getTables()        
+        res.columns = Columns({None: ConstExpr(None)})
+        self.query = res
+    
+    def __repr__(self):
+        # if hasattr(self, 'expr'):
+        #     return repr(self.expr)
+        res = self.query.sql(display=False, reduce=False, correlated=True)\
+            .replace('DISTINCT \n  NULL', 'NULL')\
+            .replace('\n', '\n      ')
+        return f"EXISTS ({res})"
+    def asCols(self):
+        # if hasattr(self, 'expr'):
+        #     return Columns({'exists_' + self.expr.getTables()[0].alias: self})
+        return Columns({'exists_' + self.query.alias: self})
+    def __eq__(self, other):
+        if type(other) is ExistsExpr:
+            return self.query == other.query
+            # if hasattr(self, 'expr') and hasattr(other, 'expr'):
+            #     return self.expr == other.expr
+            # elif hasattr(self, 'query') and hasattr(other, 'query'):
+            #     return self.query == other.query
+        return False
+    def getTables(self):
+        # if hasattr(self, 'expr'):
+        #     return self.expr.getTables()
+        return self.tables
+
+
 class Columns(dict):
     
     joincond = AndExpr()
     groupbys = L()
+    leftjoin = False
     foreign_keys = L()
     # primary = None
     
@@ -495,7 +561,7 @@ class Columns(dict):
         return self.values()[0]
     
     def asQuery(self):
-        return LambdaQuery.query.Query(self.clear(), self.joincond, self.groupbys)
+        return LambdaQuery.query.Query(self.clear(), self.joincond, self.groupbys)#, leftjoin=self.leftjoin)
     
     def addCols(self, other):
         return (self.asQuery() + other.asQuery()).asCols()
@@ -524,7 +590,10 @@ class Columns(dict):
         
         # return res
         # the groupby at the end actually isn't needed, they get passed on anyway by the asQuery
-        return newinstance.asQuery().filter(cond).groupby(newinstance.groupbys)
+        res = newinstance.asQuery()
+        # res.alias = cls.__name__.lower()
+        res = res.filter(cond).groupby(newinstance.groupbys)
+        return res
     
     def getTables(self):
         return self.values().getTables()
@@ -568,6 +637,12 @@ class Columns(dict):
                 return key
         # raise KeyError("Expr not found")
         return memloc(value)
+    
+    def setExists(self):
+        for key, expr in self.items():
+            self[key] = FuncExistsExpr(expr)
+            # self[key] = ExistsExpr(expr=expr)
+        return self
     
     def delKey(self, key):
         res = copy(self)
@@ -642,7 +717,7 @@ class Columns(dict):
     
     
     def setPrimary(self, *args):
-        self.primary = L(*args).fmap(lambda x: getattr(self, x))
+        self.primary = L(*args).fmap(lambda x: getattr(self, x)).fold(lambda x, y: x % y)
         self.groupbys = L(*args).fmap(lambda x: self[x])
         
         

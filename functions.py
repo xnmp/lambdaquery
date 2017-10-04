@@ -15,7 +15,8 @@ def asExpr(value):
 
 
 def labelResult(func, args):
-    return func.__name__.strip('_') + '_' + args.bind(lambda x: x.keys()).intersperse('_')
+    return func.__name__.strip('_') + '_' + args.bind(lambda x: x.keys() if type(x) is Columns 
+                                                      else L(x.__class__.__name__.lower())).intersperse('_')
 
 
 def augment(func):
@@ -42,7 +43,7 @@ def augment(func):
         if isinstance(res, Columns):
             res = addQuery(oldjc, res.asQuery(), addcols='right').asCols()            
             if type(res) is Columns: res = res.label(labelResult(func, colargs))
-        else:            
+        else:
             res = addQuery(oldjc, res.asQuery(), addcols='right')
             # this breaks things
             # res.columns = res.columns.label(func.__name__)
@@ -65,7 +66,7 @@ def lift(func):
         # replica of augment logic
         res.groupbys = colargs.bind(lambda x: x.groupbys)
         # we're NOT using addQuery here
-        res.joincond &= colargs.fmap(lambda x: x.joincond).fold(lambda x, y: x & y)
+        res.joincond &= colargs.fmap(lambda x: x.joincond).fold(lambda x, y: x & y, mzero=AndExpr())
         # res.joincond @= colargs.fmap(lambda x: x.asQuery()).combine()
         # oldjc = colargs.fmap(lambda x: x.asQuery()).fold(lambda x, y: x @ y)
         # res = addQuery(oldjc, res.asQuery(), addcols='right').asCols()
@@ -92,7 +93,7 @@ def injective(fname=None):
             # another replica of augment
             res.groupbys = self.groupbys + res.groupbys
             
-            if type(res.columns) is not Columns:
+            if type(res) is Query and type(res.columns) is not Columns:
                 for table in res.groupbys.getTables():
                     table.derivatives += res.columns.getTables()[0]
             
@@ -202,12 +203,12 @@ def __ne__(self, other):
     return BinOpExpr("!=", self, other)
 @lift
 def __add__(self, other):
-    if self.istime() and type(other) is ConstExpr and isinstance(other.value, int):
+    if self.isTime() and type(other) is ConstExpr and isinstance(other.value, int):
         other = ConstExpr(timedelta(days = other.value))
     return BinOpExpr("+", self, other)
 @lift
 def __sub__(self, other):
-    if type(self) is BaseExpr and type(other) is BaseExpr and 'time' in self.fieldname and 'time' in other.fieldname:
+    if self.isTime() and other.isTime():
         self = Expr._epoch_(self)
         other = Expr._epoch_(other)
     return BinOpExpr("-", self, other)
@@ -240,11 +241,11 @@ def __and__(self, other):
     return self & other
 @sqlfunc
 def __invert__(expr):
-    if type(expr) is FuncExpr and expr.func.__name__ == "__invert__":
+    if isinstance(expr, FuncExpr) and expr.func.__name__ == "__invert__":
         return str(expr).replace("NOT ", "")
-    if type(expr) is FuncExpr and expr.func.__name__ == "notnull_":
+    if isinstance(expr, FuncExpr) and expr.func.__name__ == "notnull_":
         return str(expr).replace("NOT NULL", "NULL")
-    return f"NOT {expr}"
+    return f"NOT ({expr})"
 @sqlfunc
 def __neg__(expr):
     return f"-{expr}"
@@ -292,8 +293,11 @@ def case_(*pairs):
         res += f"\n  ELSE {finalexpr} \nEND"
     return res
 @sqlfunc
-def roundnum_(expr, interval=1):
-    return f"FLOOR({expr} :: FLOAT / {interval}) * {interval}"
+def roundnum_(expr, interval=1, up=False):
+    if not up: 
+        return f"FLOOR({expr} :: FLOAT / {interval}) * {interval}"
+    else:
+        return f"CEILING({expr} :: FLOAT / {interval}) * {interval}"
 @sqlfunc
 def cast_(expr, sqltype):
     strtype = str(sqltype)[1:-1]

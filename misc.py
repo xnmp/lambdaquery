@@ -5,7 +5,7 @@ from functools import reduce
 import datetime as dt
 import pandas as pd
 import numpy as np
-
+gogo=False
 
 def base10toN(num,n=36):
     """Change a  to a base-n number.
@@ -136,7 +136,10 @@ class L(list):
     
     def intersperse(self, separator):
         return separator.join(self.fmap(str))
-        
+    
+    def intersperse2(self, separator):
+        return separator.join(self.fmap(lambda x: x.andrepr()))
+    
     def bind(self, bfunc):
         return self.fmap(bfunc).flatten()
         
@@ -146,7 +149,7 @@ class L(list):
     def fold(self, ffunc=None, mzero=None, meth=None):
         if not self:
             print("Empty Fold")
-        res = mzero if mzero else self[0]
+        res = mzero if mzero is not None else self[0]
         ffunc = ffunc if ffunc is not None else getattr(mzero.__class__, meth)
         for el in self:
             res = ffunc(res, el)
@@ -158,6 +161,10 @@ class L(list):
     def all(self):
         return all(self)
         # return self.fold(self[0].__class__.__and__)
+    
+    def pop(self):
+        if self:
+            list.pop(self)
     
     def any(self):
         return any(self)
@@ -195,7 +202,7 @@ class L(list):
 def updateUnique(self, other, makecopy=False):
     res = copy(self) if makecopy else self
     for key, value in other.items():
-        if key not in res:
+        if key not in res:# and value not in res.values():
             res[key] = value
         elif value not in res.values():
             n = 0

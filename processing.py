@@ -92,7 +92,7 @@ def getdo(dofunc, overwrite=True, window=28, plot=False, outp=True, printsql=Tru
     res = dofunc()
     res.alias = dofunc.__name__[:-1]
     if printsql:
-        print(res.sql())
+        print(sql(res))
     res.get(overwrite=overwrite, outp=outp)
     print('Getdo: got data')
     if not plot:
@@ -285,7 +285,7 @@ def get(self, outfile=None, overwrite=False, datapath="/tmp", outp=True):
                 print("No data found on disk. Getting data from database.")
                 raise KeyError
         except:
-            self.data = getdata(self.sql(display=False))
+            self.data = getdata(sql(self, display=False))
             if outp:
                 print("Saving data to disk...")
                 self.data.to_csv(f'{datapath}/{self.data_path}-{self.data_date}.csv')
@@ -326,7 +326,8 @@ def getExprTypes(q0, convertbool=False):
     for key, expr in q0.columns.items():
         firstrow = plotdata.loc[0, key]
         
-        if type(expr) is BaseExpr and key in expr.getTables()[0].tableclass.foreign_keys or expr.isPrimary():
+        if type(expr) is BaseExpr and type(expr.table) is Table \
+          and (key in expr.getTables()[0].tableclass.foreign_keys or expr.isPrimary()):
             continue
         elif isinstance(firstrow, dt.datetime):
             indices.append(key)
@@ -553,7 +554,7 @@ def create(self, tablename=None):
     '''
 
     self.redshift_table = 'public.{tablename}'
-    createtable(tablename, self.sql())
+    createtable(tablename, sql(self))
     import pickle
     now = datetime.datetime.now()
     pickle.dump(self, open(f"Queries/{self.name}-{now}", "wb"))

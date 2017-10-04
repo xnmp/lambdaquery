@@ -1,49 +1,70 @@
 from LambdaQuery.reroute import *
 
 
-def tableGen(self, reduce=True, debug=False):
+def sub_sql(self):
+    return sql(self, reduce=False, subquery=True)
+
+
+def tableGen(self, reduce=True, debug=False, correlated=False, subquery=False):
     
     alltables = self.getTables()
+    
+    if correlated:
+        correlated_tables = self.groupbys.getTables()
+        alltables -= correlated_tables
+    else:
+        correlated_tables = L()
+    
     fulltables = alltables.filter(lambda x: not x.leftjoin or x in self.groupbys.getTables())
     ljtables = alltables.filter(lambda x: x.leftjoin and x not in self.groupbys.getTables())
-    # if reduce:
-        
-    res, remainingcond, addedtables, wheres, havings = '', copy(self.joincond), L(), L(), L()
+    
+    res, remainingcond, addedtables, havings = '', copy(self.joincond), L(), L()
+    wheres = self.joincond.children.filter(lambda x: not x.getTables())
     cjed = {}
     
     while len(addedtables) < len(alltables):
         
         for table in fulltables + ljtables - addedtables:
-            # if cjed and table.leftjoin: break
+            
+            if cjed and table.leftjoin and not L(*cjed.keys()).filter(lambda x: x.leftjoin).any(): break
             
             # get the properties that only depend on one table to put in the where clause
             if table.leftjoin:
-                wheres += remainingcond.children.filter(lambda x: x.iswhere and not x.isJoin() and not x.isagg())
+                wheres += remainingcond.children.filter(lambda x: table in x.getTables() 
+                                                        and x.iswhere 
+                                                        and not x.isJoin2() 
+                                                        and not x.isagg())
             else:
-                wheres += remainingcond._filter(table).children.filter(lambda x: not x.isagg())
-            # wheres += remainingcond._filter(table).children.filter(lambda x: (x.iswhere or not table.leftjoin) and not x.isagg())
+                wheres += remainingcond._filter(table, correlated_tables)\
+                                       .children.filter(lambda x: not x.isagg())
             havings += remainingcond.children.filter(lambda x: x.isagg())
             joins = remainingcond._filter(table, addedtables).children - wheres - havings
             
             if not addedtables:
-                res += f'\n{lastSeparator(res)}FROM {sql(table, reduce=reduce, subquery=True, debug=debug)}'
-            elif joins.filter(lambda x: x.isJoin()):
-                jointype = 'LEFT JOIN ' if table.leftjoin and fulltables else 'JOIN '
+                # first table
+                res += f'\nFROM {sub_sql(table)}'
+                
+            elif joins.filter(lambda x: x.isJoin2()):
+                # this one "works" and is proper
+                jointype = 'LEFT ' if table.leftjoin and fulltables else ''                
                 joinstr = str(AndExpr(joins)).replace('AND', '\n    AND')
-                res += f"\n  {jointype}{sql(table, reduce=reduce, subquery=True, debug=debug)} ON {joinstr}"
+                res += f"\n  {jointype}JOIN {sub_sql(table)} ON {joinstr}"
+                
             else:
-                if (table in cjed and cjed[table]) or not reduce:
-                    res += '\n  '
-                    if table.leftjoin: res += 'LEFT '
-                    res += f'CROSS JOIN {sql(table, reduce=reduce, subquery=True, debug=debug)}'
+                if (table in cjed and cjed[table]) or len(alltables - addedtables) == 1 or debug:
+                    jointype = 'LEFT ' if table.leftjoin and fulltables else ''
+                    if joins:
+                        joinstr = str(AndExpr(joins)).replace('AND', '\n    AND')
+                        res += f"\n  {jointype}JOIN {sub_sql(table)} ON {joinstr}"
+                    else:
+                        res += f"\n  {jointype}CROSS JOIN {sub_sql(table)}"
                 else:
-                    
                     cjed[table] = True
                     continue
             
-            cjed = {}
             remainingcond.children -= joins + wheres + havings
             addedtables.append(table)
+        cjed = {}
     
     return res, wheres, havings
 
@@ -52,44 +73,45 @@ def lastSeparator(self):
     return '\n' if len(self.split('\n  ')[-1]) > 200 else ''
 
 
-def sql(self, display=True, reduce=True, subquery=False, debug=False):
+def getGroupbys(self, havings=None, reduce=False, subquery=False):
+    exprs = self.columns.values()
+    if reduce and self.isagg() and not exprs.fmap(lambda x: x.isagg()).all():
+        groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg()).len() + 1))
+        groupbys += havings.bind(Expr.havingGroups).filter(lambda x: x not in exprs)
+        if subquery:
+            # don't include the groupbys if the outermost query is an aggregate, 
+            # because we're cheating with functions like count_
+            groupbys += self.groupbys.filter(lambda x: x not in exprs)
+    else:
+        groupbys = self.groupbys
+    return groupbys
+
+
+def sql(self, display=True, reduce=True, subquery=False, debug=False, correlated=False):
     
-    # self = deepcopy(self)
     if type(self) is Table: return str(self)
     if reduce: reduceQuery(self, debug=debug)
     
-    # if not subquery and reduce: relabel(self)
-    
-    selects = self.columns.items().sort(lambda x: x[1].isagg())
-    exprs = selects.fmap(lambda x: x[1])
+    if self in self.getTables():
+        print("INFINITE LOOP")
+        return
     
     # ==SELECT...
-    showSql = lambda p: str(p[1]) + (f' AS {p[0]}' if p[0] is not None else '')
-    selecttype1 = '' if self.isagg() else 'DISTINCT '
-    res = f'SELECT {selecttype1}\n  ' + selects.fmap(showSql).intersperse(', \n  ')
+    selects = self.columns.items().sort(lambda x: x[1].isagg())
+    showSql = lambda p: str(p[1]) + (f' AS {p[0]}' if p[0] != '' else f'')
+    select_type = '' if self.isagg() else 'DISTINCT '
+    res = f'SELECT {select_type}\n  ' + selects.fmap(showSql).intersperse(', \n  ')
     
     # ==FROM...
-    joinstr, wheres, havings = tableGen(self, reduce=reduce, debug=debug)
+    joinstr, wheres, havings = tableGen(self, reduce=reduce, debug=debug, correlated=correlated, subquery=subquery)
     res += joinstr
     
     # ==WHERE...
-    if wheres: res += f'\n{lastSeparator(res)}WHERE ' + wheres.intersperse('\n    AND ')
+    if wheres: res += f'\nWHERE ' + wheres.intersperse2('\n    AND ')
     
     # ==GROUP BY...
-    # if not debug:
-    #     if self.isagg():
-    #         groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg()).len() + 1))        
-    #         if subquery or not groupbys:
-    #             # don't incllude the groupbys if the outermost query is an aggregate, 
-    #             # because we're cheating with functions like count_
-    #             groupbys += (self.groupbys + havings.bind(Expr.baseExprs)).filter(lambda x: x not in exprs)
-    #         groupbys += havings.bind(Expr.havingGroups)
-    #         if groupbys:
-    #             res += '\nGROUP BY ' + groupbys.intersperse(', ')
-    # else:
-    # GROUP BY for debugging
-    groupbys = self.groupbys + havings.bind(Expr.havingGroups)
-    res += f'\n{lastSeparator(res)}GROUP BY ' + groupbys.intersperse(', ')
+    groupbys = getGroupbys(self, havings, reduce=reduce, subquery=subquery)
+    if groupbys: res += f'\nGROUP BY ' + groupbys.intersperse(', ')
     
     # ==HAVING...
     if havings: res += f'\nHAVING ' + havings.intersperse('\n    AND ')
@@ -99,13 +121,19 @@ def sql(self, display=True, reduce=True, subquery=False, debug=False):
     if self.limitvar: res += f'\nLIMIT {self.limitvar}'
     
     # ADJUSTMENTS
-    if subquery:
+    if subquery:        
         indent = "\n             " if self.leftjoin else "\n        "
-        res = f'(--━━━━━━━━━━ SUBQUERY ━━━━━━━━━━--\n{res}\n--━━━━━━━━━━━━━━━━━━━━━━━━━━━━━--\n) AS {self.abbrev}'.replace("\n", indent)
+        res = f'(--━━━━━━━━━━ SUBQUERY ━━━━━━━━━━--\n{res}\n--━━━━━━━━━━━━━━━━━━━━━━━━━━━━━--\n) AS {self.abbrev}'.replace("\n", indent)        
     elif display:
         res = f'SQL() = \'\'\'\n{res}\n\'\'\''
     
     return res
 
+
+# for pdb debugging
 import LambdaQuery.query
+@property
+def p_sql(self):
+    print(sql(self, reduce=False))
+LambdaQuery.query.Query.p = p_sql
 LambdaQuery.query.Query.sql = sql

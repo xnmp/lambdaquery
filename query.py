@@ -279,7 +279,7 @@ class Query(Table, Monad):
     def notExists(self):
         return self.exists(_func='isnull_')
     
-    def groupby(self, exprlist=None):
+    def _groupby(self, exprlist=None):
         if not self.groupbys and exprlist is None:
             exprlist = L(self.columns.primary)
         if not isinstance(exprlist, list):
@@ -408,7 +408,7 @@ class Query(Table, Monad):
                 res.columns = rescolumns
         return res
     
-    def groupbyExplicit(self, *args):
+    def groupby(self, *args):
         # explicit group by - add it one level back
         newgroups = L(*args).bind(lambda x: x(self.columns).values() if hasattr(x, '__call__') else x.values())
         res = copy(self)

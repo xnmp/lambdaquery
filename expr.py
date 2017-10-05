@@ -592,7 +592,7 @@ class Columns(dict):
         # the groupby at the end actually isn't needed, they get passed on anyway by the asQuery
         res = newinstance.asQuery()
         # res.alias = cls.__name__.lower()
-        res = res.filter(cond).groupby(newinstance.groupbys)
+        res = res.filter(cond)._groupby(newinstance.groupbys)
         return res
     
     def getTables(self):

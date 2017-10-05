@@ -51,7 +51,9 @@ def tableGen(self, reduce=True, debug=False, correlated=False, subquery=False):
                 res += f"\n  {jointype}JOIN {sub_sql(table)} ON {joinstr}"
                 
             else:
-                if (table in cjed and cjed[table]) or len(alltables - addedtables) == 1 or debug:
+                # cross joining
+                if (table in cjed and cjed[table]) or len(alltables - addedtables) == 1:
+                    if table in cjed: del cjed[table]
                     jointype = 'LEFT ' if table.leftjoin and fulltables else ''
                     if joins:
                         joinstr = str(AndExpr(joins)).replace('AND', '\n    AND')
@@ -64,7 +66,6 @@ def tableGen(self, reduce=True, debug=False, correlated=False, subquery=False):
             
             remainingcond.children -= joins + wheres + havings
             addedtables.append(table)
-        cjed = {}
     
     return res, wheres, havings
 
@@ -75,15 +76,17 @@ def lastSeparator(self):
 
 def getGroupbys(self, havings=None, reduce=False, subquery=False):
     exprs = self.columns.values()
-    if reduce and self.isagg() and not exprs.fmap(lambda x: x.isagg()).all():
+    if (reduce or subquery) and self.isagg() and not exprs.fmap(lambda x: x.isagg()).all():
         groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg()).len() + 1))
         groupbys += havings.bind(Expr.havingGroups).filter(lambda x: x not in exprs)
         if subquery:
             # don't include the groupbys if the outermost query is an aggregate, 
             # because we're cheating with functions like count_
             groupbys += self.groupbys.filter(lambda x: x not in exprs)
-    else:
+    elif self.isagg():
         groupbys = self.groupbys
+    else:
+        return L()
     return groupbys
 
 

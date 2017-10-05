@@ -1,4 +1,4 @@
-from LambdaQuery.tables import *
+from tables import *
 from datetime import timedelta
 
 

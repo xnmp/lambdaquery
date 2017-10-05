@@ -3,9 +3,8 @@ from datetime import timedelta
 from lenses import lens
 from functools import reduce
 import datetime as dt
-import pandas as pd
-import numpy as np
-gogo=False
+# import pandas as pd
+# import numpy as np
 
 def base10toN(num,n=36):
     """Change a  to a base-n number.

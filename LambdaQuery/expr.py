@@ -385,12 +385,12 @@ class EqExpr(BinOpExpr):
 
 class ConstExpr(Expr):
     
-    allowedTypes = [int, str, float, bool, 
-                    dt.datetime, dt.timedelta, pd.Timestamp, np.float64, type(None)]
+    allowedTypes = (int, str, float, bool, 
+                    dt.datetime, dt.timedelta, type(None))#pd.Timestamp, np.float64
     
     def __init__(self, value):
-        if type(value) not in ConstExpr.allowedTypes:
-            raise TypeError("Inappropriate type of ConstExpr")
+        # if not isinstance(value, ConstExpr.allowedTypes):
+        #     raise TypeError("Inappropriate type of ConstExpr")
         self.value = value
     
     def __repr__(self):
@@ -407,7 +407,7 @@ class ConstExpr(Expr):
                 return f"INTERVAL '{hours} HOUR'"
             else:
                 return f"INTERVAL '{seconds} SECOND'"
-        elif isinstance(self.value, dt.datetime) or isinstance(self.value, pd.Timestamp):
+        elif isinstance(self.value, dt.datetime):# or isinstance(self.value, pd.Timestamp):
             return "\'" + self.value.strftime("%Y-%m-%d %H:%M:%S") + "\' :: TIMESTAMP"
         elif isinstance(self.value, str):
             return f"\'{self.value}\'"

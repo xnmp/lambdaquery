@@ -1,8 +1,7 @@
 # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^
 
-from LambdaQuery.tables import *
-from LambdaQuery.sql import *
-from LambdaQuery.other_functions import *
+from LambdaQuery import *
+from other_functions import *
 
 import pandas as pd
 import numpy as np

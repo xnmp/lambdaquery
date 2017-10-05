@@ -379,15 +379,37 @@ def getEqExprs(table):
 
 # %% ^━━━━━━━━━━━━━━━━━ OTHER ━━━━━━━━━━━━━━━^
 
+def isInvalid(expr):
+    # an expr that compares a table to an aggregate of that table
+    # ie an expr whose children contain the table, and an expr whose getref is an aggexpr containing the same table
+    btables = expr.getTables().filter(lambda x: x.isTable())
+    innertables = expr.baseExprs()\
+                      .filter(lambda x: not x.table.isTable())\
+                      .fmap(lambda x: x.getRef())\
+                      .bind(lambda x: L(x) + x.descendants())\
+                      .filter(lambda x: isinstance(x, AggExpr)).getTables()        
+    
+    return btables ^ innertables
+
+def aggedTables(expr):
+    return expr.children\
+               .bind(lambda x: L(x) + x.descendants())\
+               .filter(lambda x: isinstance(x, AggExpr)).getTables()
+# .fmap(lambda x: x.getRef())
+
+
 def canMerge(self):
     # it doesn't contain an aggexpr with a child whose getref is an aggexpr
-    return self.allExprs()\
+    # OR it doesn't contain 
+    # ie an expr that compares a table to an aggregate of that table
+    res = self.allExprs()\
                .bind(lambda x: L(x) + x.descendants())\
                .filter(lambda x: isinstance(x, AggExpr))\
                .bind(lambda x: x.baseExprs())\
                .fmap(lambda x: x.getRef())\
                .filter(lambda x: x.isagg())\
                .notExists()
+    return res and self.allExprs().filter(lambda x: isInvalid(x)).notExists()#and self.joincond.children.filter(lambda x: x.getRef().isagg()).notExists()
 
 def mergeGrouped(self, debug=False):
     # merge tables that have the same groupbys, because only then does it make sense to merge them

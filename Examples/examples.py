@@ -1,3 +1,4 @@
+
 from LambdaQuery.example_tables import *
 
 print(User.query().sql())

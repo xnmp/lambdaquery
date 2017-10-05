@@ -1,4 +1,10 @@
 Archive/*
+build/*
+dist/*
+
 __pycache__/*
 tables.py
 test.py
+processing.py
+other_functions.py
+start.py

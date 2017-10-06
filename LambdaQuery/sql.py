@@ -45,6 +45,7 @@ def tableGen(self, reduce=True, debug=False, correlated=False, subquery=False):
                 res += f'\nFROM {sub_sql(table)}'
                 
             elif joins.filter(lambda x: x.isJoin2()):
+                if table in cjed: del cjed[table]
                 # this one "works" and is proper
                 jointype = 'LEFT ' if table.leftjoin and fulltables else ''                
                 joinstr = str(AndExpr(joins)).replace('AND', '\n    AND')
@@ -74,12 +75,12 @@ def lastSeparator(self):
     return '\n' if len(self.split('\n  ')[-1]) > 200 else ''
 
 
-def getGroupbys(self, havings=None, reduce=False, subquery=False):
+def getGroupbys(self, havings=None, reduce=False, subquery=False, debug=False):
     exprs = self.columns.values()
     if (reduce or subquery) and self.isagg() and not exprs.fmap(lambda x: x.isagg()).all():
         groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg()).len() + 1))
         groupbys += havings.bind(Expr.havingGroups).filter(lambda x: x not in exprs)
-        if subquery:
+        if subquery and not debug:
             # don't include the groupbys if the outermost query is an aggregate, 
             # because we're cheating with functions like count_
             groupbys += self.groupbys.filter(lambda x: x not in exprs)
@@ -113,7 +114,7 @@ def sql(self, display=True, reduce=True, subquery=False, debug=False, correlated
     if wheres: res += f'\nWHERE ' + wheres.intersperse2('\n    AND ')
     
     # ==GROUP BY...
-    groupbys = getGroupbys(self, havings, reduce=reduce, subquery=subquery)
+    groupbys = getGroupbys(self, havings, reduce=reduce, subquery=subquery, debug=debug)
     if groupbys: res += f'\nGROUP BY ' + groupbys.intersperse(', ')
     
     # ==HAVING...
@@ -123,7 +124,7 @@ def sql(self, display=True, reduce=True, subquery=False, debug=False, correlated
     if self.ordervar: res += f'\nORDER BY ' + self.ordervar.intersperse(', ')
     if self.limitvar: res += f'\nLIMIT {self.limitvar}'
     
-    # ADJUSTMENTS
+    # ==ADJUSTMENTS
     if subquery:        
         indent = "\n             " if self.leftjoin else "\n        "
         res = f'(--━━━━━━━━━━ SUBQUERY ━━━━━━━━━━--\n{res}\n--━━━━━━━━━━━━━━━━━━━━━━━━━━━━━--\n) AS {self.abbrev}'.replace("\n", indent)        

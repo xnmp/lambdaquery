@@ -113,6 +113,9 @@ class Query(Table, Monad):
     def allExprs(self):
         return self.groupbys + self.columns.values() + self.joincond.children
     
+    def allDescendants(self):
+        return self.allExprs().bind(lambda x: L(x) + x.descendants())
+    
     def setSource(self, newtable, oldtable=None):
         self.modify(lambda x: x.setSource(newtable, oldtable))
     
@@ -170,23 +173,21 @@ class Query(Table, Monad):
     def ungroupby(self):
         # MUTATES
         grouptable = self.groupbys[-1].table
-        # pnames = grouptable.primarynames()
         
+        primarygpby = False
         for gpbyexpr in reversed(self.groupbys):
             if gpbyexpr.isPrimary() and gpbyexpr.table == grouptable:
                 selfgroupbys = copy(self.groupbys)
                 selfgroupbys.pop()
                 self.groupbys = selfgroupbys
-            elif gpbyexpr.table == grouptable:
+                primarygpby = True
+            elif gpbyexpr.table == grouptable and not primarygpby:
                 selfgroupbys = copy(self.groupbys)
                 selfgroupbys.pop()
                 self.groupbys = selfgroupbys
                 break
             else:
                 break
-            # elif self.columns.values().filter(lambda x: x.isagg()).getTables() <= 
-            # elif gpbyexpr.isPrimary():
-                # break
     
     
     # %% ^━━━━━━━━━━━━━━ PUBLIC FUNCTIONS ━━━━━━━━━━━━━━━^
@@ -270,7 +271,7 @@ class Query(Table, Monad):
         # return ExistsExpr(self).asCols()
         
         # as a straight up (screws up one-to-one ness)
-        res = getattr(self.lj().asCols().firstCol(), _func)().one.label('exists_' + alias).setExists()
+        res = self.lj().asCols().firstCol().__getattr__(_func)().one.label('exists_' + alias).setExists()
         return res
         
         # as a bool any
@@ -435,7 +436,7 @@ def addQuery(self, other, addcols='both'):
     tables0, tables1 = self.joincond.getTables(), other.joincond.getTables()
     jtables = tables0 & tables1
     
-    # start with the ones that are in common:
+    # # start with the ones that are in common:
     # for tab1 in jtables:
     #     cond0 = res.joincond._filter(tab1, jtables)
     #     cond1 = other.joincond._filter(tab1, jtables)

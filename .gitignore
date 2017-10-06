@@ -2,6 +2,7 @@ Archive/*
 build/*
 dist/*
 
+LambdaQuery/__pycache__/*
 __pycache__/*
 tables.py
 test.py

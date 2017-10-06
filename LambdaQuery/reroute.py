@@ -128,7 +128,7 @@ def moveIn(expr, inner, outer):
 #                      .filter(lambda x: table in x.getTables())\
 #                      .fmap(lambda x: (x, not (x.getRef().getTables() - inner.groupbys.getTables() - inner.columns.getTables()) 
 #                              ))
-    
+
 #     for expr in outer.joincond.children\
 #                      .filter(lambda x: table in x.getTables())\
 #                      .filter(lambda x: not (x.getRef().getTables() - inner.groupbys.getTables() - inner.columns.getTables()) 
@@ -175,15 +175,19 @@ def moveInAll(inner, outer, debug=False):
     """
     finish = False
     moved = False
+    # i=0
+    
     while not finish:
+        # print(i)
         finish = True
         for expr in outer.joincond.children:
             if canMoveIn(expr, inner, outer):
                 finish = False
-                moveIn(expr, inner, outer)                
+                moveIn(expr, inner, outer)
                 if debug:
                     print("MOVED_IN():", expr)
                     moved = True
+    
     if debug and moved:
         print(outer.sql(reduce=False, debug=True))
 
@@ -241,7 +245,7 @@ def moveOutAll(inner, outer, debug=False):
 
 # %% ^━━━━━━━━━━━━━━━━━ REROUTING ━━━━━━━━━━━━━━━━━━━━^
 
-def canReroute(expr, basetable, target):
+def canReroute(expr, basetable, target, outer=None):
     # the target is the inner query
     # if the tables of expr are a subset of the tables of the target... and not aggregate and not constant
     # and we don't reroute exists exprs
@@ -249,10 +253,10 @@ def canReroute(expr, basetable, target):
     
     return basetable in expr.getTables() and expr.getTables() <= target.getTables() \
            and type(expr) is not ConstExpr and (not expr.isagg()) \
-           and not isexists
+           and not isexists #and type(expr) is BaseExpr
 
 
-def reroute(expr, basetable, target):
+def reroute(expr, basetable, target, outer=None):
     """
     target is the "intermediate" table
     for an expr, if it can be rerouted, then make it as a select of that target, 
@@ -382,6 +386,7 @@ def getEqExprs(table):
 def isInvalid(expr):
     # an expr that compares a table to an aggregate of that table
     # ie an expr whose children contain the table, and an expr whose getref is an aggexpr containing the same table
+    # or if it contains a left joined table then all bets are off
     btables = expr.getTables().filter(lambda x: x.isTable())
     innertables = expr.baseExprs()\
                       .filter(lambda x: not x.table.isTable())\
@@ -389,7 +394,7 @@ def isInvalid(expr):
                       .bind(lambda x: L(x) + x.descendants())\
                       .filter(lambda x: isinstance(x, AggExpr)).getTables()        
     
-    return btables ^ innertables
+    return btables ^ innertables or btables.filter(lambda x: x.leftjoin)
 
 def aggedTables(expr):
     return expr.children\
@@ -397,6 +402,8 @@ def aggedTables(expr):
                .filter(lambda x: isinstance(x, AggExpr)).getTables()
 # .fmap(lambda x: x.getRef())
 
+def hasExists(inner, outer):
+    return outer.allDescendants().filter(lambda x: inner in x.getTables() and isinstance(x, FuncExistsExpr)).exists()
 
 def canMerge(self):
     # it doesn't contain an aggexpr with a child whose getref is an aggexpr
@@ -409,23 +416,21 @@ def canMerge(self):
                .fmap(lambda x: x.getRef())\
                .filter(lambda x: x.isagg())\
                .notExists()
-    return res and self.allExprs().filter(lambda x: isInvalid(x)).notExists()#and self.joincond.children.filter(lambda x: x.getRef().isagg()).notExists()
+    return res and self.allExprs().filter(lambda x: isInvalid(x)).notExists()
 
 def mergeGrouped(self, debug=False):
     # merge tables that have the same groupbys, because only then does it make sense to merge them
     
-    # oldself = copy(self)
     checktables = self.getTables()
-    # if not self.isagg(): checktables += self
     
     alltablegroups = L()
     
     if canMerge(self):
-        alltablegroups = L(L(self) + checktables.filter(lambda x: x.groupbys.exists()
+        alltablegroups = L(L(self) + checktables.filter(lambda x: x.groupbys.exists() #and not hasExists(x, self)
                                                           and x.groupbys #.fmap(lambda x: x.getRef()) 
-                                                            <= self.groupbys))#.filter(lambda x: len(x) > 1)
+                                                            <= self.groupbys)).filter(lambda x: len(x) > 1)
     
-    if not alltablegroups:# or self.isagg():
+    if not alltablegroups:
         alltablegroups = checktables.filter(lambda x: x.groupbys.exists())\
                            .groupby(lambda x: (x.groupbys, x.leftjoin))\
                            .filter(lambda x: len(x.value) > 1)\
@@ -437,18 +442,24 @@ def mergeGrouped(self, debug=False):
         self.setSource(merged, oldtable=tablegroup)
         
         if self in tablegroup:
+            
             # merge with a subquery and convert the agg exprs
-            merged.modify(lambda x: x.getRef(oldtables=tablegroup))
-            self.modify(lambda x: x.getRef(oldtables=L(merged)))
+            merged.modify(lambda x: mergeExpr(x, oldtables=tablegroup))
+            self.modify(lambda x: mergeExpr(x, oldtables=L(merged)))
             merged.columns = self.columns
             self.__dict__.update(merged.__dict__)
             break
     
-    if len(alltablegroups) > 1:#self.sql(reduce=False) != oldself.sql(reduce=False):        
+    if alltablegroups:
         mergeGrouped(self)
         
     # for subtable in self.subQueries():
     #     mergeGrouped(subtable)
+
+def mergeExpr(expr, oldtables):
+    res = expr.getRef(oldtables=oldtables)
+    # if AndExpr(expr.baseExprs().filter(lambda x: x.table.leftjoin).fmap(Expr._isnull_)).children:        
+    return res
 
 def canCleanUp(self):
     inner = self.getTables()[0]
@@ -512,11 +523,11 @@ def reduceQuery(self, debug=False):
         print(' # %% ^━━━━━━━━━━━━━━━━━ REDUCING... ━━━━━━━━━━━━━━━━━━━━━━━━^ ')
         print(self.sql(reduce=False, debug=True))        
     
+    # if the selects are left joined, then make the query left joined
     if self.isQuery() and self.getTables().fmap(lambda x: x.leftjoin).all():        
         self.leftjoin = True
         for table in self.getTables():
             table.leftjoin = False
-    
     
     # STEP 1: MERGE SUBQUERIES WITH THE SAME GROUP BYS
     selfcopy = copy(self)
@@ -533,7 +544,7 @@ def reduceQuery(self, debug=False):
         if debug:
             print("NOTHING TO REDUCE... DONE")
             print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
-        return
+        return    
     
     
     # STEP 2: MOVING IN
@@ -542,7 +553,7 @@ def reduceQuery(self, debug=False):
     
     
     # STEP 3: MOVING OUT - everything that's grouped by or joined to something that's grouped by
-    for newtable in self.subQueries():
+    for newtable in self.subQueries():        
         moveOutAll(inner=newtable, outer=self, debug=debug)
     
     
@@ -552,7 +563,7 @@ def reduceQuery(self, debug=False):
         if canRerouteTable(table, inner=newtable, outer=self): continue
         copyJoinconds(table, newtable, self)
         copyTable(table, self, addcond=False)
-        if debug: 
+        if debug:
             print("COPY TABLE", table)
             print(self.sql(reduce=False, debug=True))
     

@@ -7,7 +7,7 @@ def asExpr(value):
         if len(value) > 1:
             raise TypeError(f"Can't convert Columns with more than one Expr to Expr: {value}")
         return value.asExpr()
-    elif type(value) in ConstExpr.allowedTypes:
+    elif isinstance(value, ConstExpr.allowedTypes):
         return ConstExpr(value)
     elif isinstance(value, Expr):
         return value
@@ -282,6 +282,8 @@ def if_(cond, expr1, expr2):
     return f"CASE WHEN {cond} THEN {expr1} ELSE {expr2} END"
 @sqlfunc
 def ifen_(expr, cond):
+    # if type(expr) is FuncExpr and expr.func.__name__ == "ifen_":
+    #     cond = cond & expr.children[0]._notnull_() & expr.children[1]._notnull_()
     return f"CASE WHEN {cond} THEN {expr} END"
 @sqlfunc
 def case_(*pairs):

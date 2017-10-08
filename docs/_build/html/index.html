@@ -26,7 +26,7 @@
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Welcome to LambdaQuery’s documentation!" href="motivation.html" />
+    <link rel="next" title="Shortcomings of SQL" href="motivation.html" />
    
   <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   
@@ -45,28 +45,35 @@
   <div class="section" id="welcome-to-lambdaquery">
 <h1>Welcome to LambdaQuery!<a class="headerlink" href="#welcome-to-lambdaquery" title="Permalink to this headline">¶</a></h1>
 <div class="toctree-wrapper compound">
-<p class="caption"><span class="caption-text">Contents:</span></p>
+<p class="caption"><span class="caption-text">Contents</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="motivation.html">Welcome to LambdaQuery&#8217;s documentation!</a><ul class="simple">
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="motivation.html#indices-and-tables">Indices and tables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="motivation.html">Shortcomings of SQL</a></li>
 <li class="toctree-l1"><a class="reference internal" href="start.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="start.html#setting-up-tables">Setting up Tables</a></li>
-<li class="toctree-l1"><a class="reference internal" href="query.html">Selecting</a></li>
-<li class="toctree-l1"><a class="reference internal" href="query.html#filtering">Filtering</a></li>
-<li class="toctree-l1"><a class="reference internal" href="query.html#joining">Joining</a></li>
+<li class="toctree-l1"><a class="reference internal" href="query.html">Querying</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="query.html#selecting">Selecting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="query.html#filtering">Filtering</a></li>
+<li class="toctree-l2"><a class="reference internal" href="query.html#joining">Joining</a></li>
+<li class="toctree-l2"><a class="reference internal" href="query.html#left-joins">Left Joins</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="query.html#composition">Composition</a></li>
 <li class="toctree-l1"><a class="reference internal" href="query.html#aggregation">Aggregation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="query.html#left-joins">Left Joins</a></li>
-<li class="toctree-l1"><a class="reference internal" href="properties.html">Injective (One-to-One) Propeties</a></li>
-<li class="toctree-l1"><a class="reference internal" href="properties.html#one-to-many-properties">One-to-Many Properties</a></li>
-<li class="toctree-l1"><a class="reference internal" href="advanced.html">Grouping By</a></li>
-<li class="toctree-l1"><a class="reference internal" href="advanced.html#last-before">Last Before</a></li>
-<li class="toctree-l1"><a class="reference internal" href="advanced.html#using-kleisli-and-lifted">Using Kleisli and Lifted</a></li>
+<li class="toctree-l1"><a class="reference internal" href="properties.html">Defining Properties</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="properties.html#injective-one-to-one-properties">Injective (One-to-One) Properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="properties.html#one-to-many-properties">One-to-Many Properties</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="properties.html#composition">Composition</a></li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="advanced.html#grouping-by">Grouping By</a></li>
+<li class="toctree-l2"><a class="reference internal" href="advanced.html#last-before">Last Before</a></li>
+<li class="toctree-l2"><a class="reference internal" href="advanced.html#using-kleisli-and-lifted">Using Kleisli and Lifted</a></li>
+</ul>
+</li>
 </ul>
 </div>
-<p>This is a library that enables one to write composable SQL in pure python. It is heavily functional, enabling one to chain query combinators in incidentally very similar to the <a class="reference external" href="https://arxiv.org/abs/1702.08409">Rabbit query language:</a>.</p>
+<p>This is a library that enables one to write composable SQL in pure python. It is heavily functional, enabling one to chain query combinators in incidentally very similar to the <a class="reference external" href="https://arxiv.org/abs/1702.08409">Rabbit query language</a>.</p>
 <p>The question that we solve - why is writing SQL so hard? How is it that something describable in two sentences in English becomes a monster of a query? How does one not become lost navigating the scoping rules and the throwaway names that become rampant when you have more than one layer of aggregation? LambdaQuery is the answer.</p>
 <p>The main goals of LambdaQuery are to be a query API that:</p>
 <ul>
@@ -100,15 +107,10 @@
 <li><p class="first">Minimize boilerplate - setting up tables should be as easy as it is in SQLAlchemy.</p>
 </li>
 </ul>
-</div>
-<div class="section" id="indices-and-tables">
-<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
-<ul class="simple">
-<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
-<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
-<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
-</ul>
+<div class="section" id="contributing">
+<h2>Contributing<a class="headerlink" href="#contributing" title="Permalink to this headline">¶</a></h2>
 <p>If you have a question then please raise an issue on Github <a class="reference external" href="https://github.com/xnmp/lambdaquery/issues/">here</a>.</p>
+</div>
 </div>
 
 
@@ -119,14 +121,16 @@
         <div class="sphinxsidebarwrapper">
   <h3><a href="#">Table Of Contents</a></h3>
   <ul>
-<li><a class="reference internal" href="#">Welcome to LambdaQuery!</a></li>
-<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+<li><a class="reference internal" href="#">Welcome to LambdaQuery!</a><ul>
+<li><a class="reference internal" href="#contributing">Contributing</a></li>
+</ul>
+</li>
 </ul>
 <div class="relations">
 <h3>Related Topics</h3>
 <ul>
   <li><a href="#">Documentation overview</a><ul>
-      <li>Next: <a href="motivation.html" title="next chapter">Welcome to LambdaQuery&#8217;s documentation!</a></li>
+      <li>Next: <a href="motivation.html" title="next chapter">Shortcomings of SQL</a></li>
   </ul></li>
 </ul>
 </div>

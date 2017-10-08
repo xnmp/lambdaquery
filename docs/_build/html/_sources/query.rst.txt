@@ -1,15 +1,21 @@
 .. highlight:: python
 
 
+
+
+Querying
+========
+
 .. image:: images/schema.png
 
 
+
 Selecting
-=======================================
+---------
 
 
 Filtering
-==================
+---------
 
 Use the .filter
 
@@ -17,9 +23,16 @@ Use the .filter
 
 
 Joining
-========
+-------
 
-Use the `join` method. Most of this is already done by the foreign keys
+Use the `join` method. Most of this is already done by the foreign keys. 
+
+
+Left Joins
+----------
+
+left joining dependents
+
 
 
 
@@ -36,7 +49,3 @@ Aggregation
 min by primary key
 
 
-Left Joins
-==========
-
-left joining dependents

@@ -348,11 +348,13 @@ class Query(Table, Monad):
         return res
     
     
-    def join(self, cond):
-        return self.filter(cond, join=True)
+    def join(self, other, cond):
+        res = other.filter(lambda x: cond(self, x))
+        res.groupbys = self.groupbys + res.groupbys
+        return res
     
     
-    def filter(self, cond=None, join=False):
+    def filter(self, cond=None):
         res = copy(self)
         
         if not cond: return res
@@ -417,6 +419,10 @@ class Query(Table, Monad):
         res.groupbys += newgroups + (self.groupbys - res.groupbys)
         # res.groupbys = newgroups + res.groupbys
         return res
+        
+    def group(self, *args):
+        args = L(*args).fmap(lambda x: (lambda y: getattr(y, x)) if type(x) is str else x)
+        return self.fmap(lambda x: args.fmap(lambda y: y(x)).fold(lambda y, z: y % z)).distinct()
     
 # class FixedTable(Table):
 #     def __init__(self, q0):
@@ -424,7 +430,6 @@ class Query(Table, Monad):
 #         self.alias = q0.alias
 #     def __repr__(self):
 #         return repr(self.query)
-        
 
 
 # %% ^━━━━━━━━━━━━━━━━━━━━━ THE HEAVY LIFTER ━━━━━━━━━━━━━━━━━━━━━━━^

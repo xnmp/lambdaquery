@@ -675,7 +675,7 @@ class Columns(dict):
         selfclass = self.__class__
         # self.__class__.table.instance = self
         
-        # these are all defined every ttime it's instantiate, which is bad design. Better to define once. 
+        # these are all defined every ttime it's instantiated, which is bad design. Better to define once. 
         
         if primary:
             selfclass.primary = attrname
@@ -686,7 +686,7 @@ class Columns(dict):
             @rename(selfclass.__name__.lower())
             def primary_key_cols(self):
                 # try:
-                return selfclass.query().join(lambda x: getattr(x, attrname) == self.findattr(attrname))                
+                return selfclass.query().filter(lambda x: getattr(x, attrname) == self.findattr(attrname))
                 # except AttributeError:
                 #     raise KeyError("No such primary key: ", self, attrname)
             setattr(Columns, selfclass.__name__.lower(), primary_key_cols)
@@ -697,20 +697,20 @@ class Columns(dict):
             if ref is None: ref = foreign.__name__.lower()
             @LambdaQuery.functions.injective(ref)
             def primary_key(self):
-                return foreign.query().join(lambda x: x.primaryExpr() == getattr(self, attrname))
+                return foreign.query(lambda x: x.primaryExpr() == getattr(self, attrname))
             setattr(selfclass, ref, primary_key)
             
             if backref is None: backref = selfclass.__name__.lower() + 's'
             @LambdaQuery.functions.Kleisli
             def foreign_key(self, cond=None):
-                return selfclass.query().join(lambda x: getattr(x, attrname) == self.primaryExpr()).filter(cond)
+                return selfclass.query(lambda x: getattr(x, attrname) == self.primaryExpr()).filter(cond)
             setattr(foreign, backref, foreign_key.func)
             
             @LambdaQuery.functions.Kleisli
             def foreign_key_cols(self, cond=None):
                 # try:
                 jfield = (self.keys() ^ selfclass().keys())[0]
-                return selfclass.query().join(lambda x: getattr(x, jfield) == getattr(self, jfield)).filter(cond)
+                return selfclass.query(lambda x: getattr(x, jfield) == getattr(self, jfield)).filter(cond)
                 # except IndexError:
                     # raise KeyError("No such foreign key: ", self, selfclass.__name__.lower())
             setattr(Columns, selfclass.__name__.lower() + 's', foreign_key_cols.func)
@@ -735,7 +735,7 @@ class Columns(dict):
             if multiple: 
                 res[newname + '_' + key] = expr
             else:
-                res[newname] = expr        
+                res[newname] = expr
         return res
     
     @property

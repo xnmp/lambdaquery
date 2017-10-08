@@ -405,27 +405,29 @@ def aggedTables(expr):
 def hasExists(inner, outer):
     return outer.allDescendants().filter(lambda x: inner in x.getTables() and isinstance(x, FuncExistsExpr)).exists()
 
-def canMerge(self):
+def canMerge(self, subquery=False):
     # it doesn't contain an aggexpr with a child whose getref is an aggexpr
+    # the nonagg columns aren't aggs
     # OR it doesn't contain 
     # ie an expr that compares a table to an aggregate of that table
-    res = self.allExprs()\
-               .bind(lambda x: L(x) + x.descendants())\
-               .filter(lambda x: isinstance(x, AggExpr))\
-               .bind(lambda x: x.baseExprs())\
-               .fmap(lambda x: x.getRef())\
-               .filter(lambda x: x.isagg())\
-               .notExists()
-    return res and self.allExprs().filter(lambda x: isInvalid(x)).notExists()
+    canmerge = self.allExprs()\
+                   .bind(lambda x: L(x) + x.descendants())\
+                   .filter(lambda x: isinstance(x, AggExpr))\
+                   .bind(lambda x: x.baseExprs())\
+                   .fmap(lambda x: x.getRef())\
+                   .filter(lambda x: x.isagg())\
+                   .notExists()
+    subq = self.columns.values().filter(lambda x: not x.isagg() and x.getRef().isagg()).notExists() if not subquery else True
+    return canmerge and self.allExprs().filter(lambda x: isInvalid(x)).notExists() and subq
 
-def mergeGrouped(self, debug=False):
+def mergeGrouped(self, debug=False, subquery=False):
     # merge tables that have the same groupbys, because only then does it make sense to merge them
     
     checktables = self.getTables()
     
     alltablegroups = L()
     
-    if canMerge(self):
+    if canMerge(self, subquery=subquery):
         alltablegroups = L(L(self) + checktables.filter(lambda x: x.groupbys.exists() #and not hasExists(x, self)
                                                           and x.groupbys #.fmap(lambda x: x.getRef()) 
                                                             <= self.groupbys)).filter(lambda x: len(x) > 1)
@@ -509,7 +511,7 @@ def copyJoinconds(basetable, source, target):
 
 # %% ^━━━━━━━━━━━━━━━━━━━━━━━ REDUCE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^
 
-def reduceQuery(self, debug=False):
+def reduceQuery(self, debug=False, subquery=False):
     """
     make everything appear in scope - the dependency graph has to be a tree
     this means we have to redirect everything via its aggregate queries
@@ -531,7 +533,7 @@ def reduceQuery(self, debug=False):
     
     # STEP 1: MERGE SUBQUERIES WITH THE SAME GROUP BYS
     selfcopy = copy(self)
-    mergeGrouped(self)
+    mergeGrouped(self, subquery=subquery)
     if debug:
         if str(selfcopy.__dict__) != str(self.__dict__):
             print(' # %% ^━━━━━━━━━━━━━━━━━ AFTER MERGING ━━━━━━━━━━━━━━━━━━━^ ')
@@ -596,7 +598,7 @@ def reduceQuery(self, debug=False):
     for subtable in self.subQueries():
         if debug:
             print(' # %% ^━━━━━━━━━━━━━━━ REDUCING CHILD ━━━━━━━━━━━━━━━━━━━━^ ')
-        reduceQuery(subtable, debug=debug)
+        reduceQuery(subtable, debug=debug, subquery=True)
     
     
     # STEP 9: CLEAN UP REDUNDANT OUTERMOST QUERY

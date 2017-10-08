@@ -84,7 +84,7 @@ def getGroupbys(self, havings=None, reduce=False, subquery=False, debug=False):
             # don't include the groupbys if the outermost query is an aggregate, 
             # because we're cheating with functions like count_
             groupbys += self.groupbys.filter(lambda x: x not in exprs)
-    elif self.isagg():
+    elif self.isagg() or debug:
         groupbys = self.groupbys
     else:
         return L()

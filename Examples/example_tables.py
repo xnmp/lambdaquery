@@ -1,9 +1,5 @@
-from LambdaQuery.functions import *
+from LambdaQuery import *
 from datetime import timedelta
-
-# the classes actually construct tables, not particular instances of a user, so it's NOT an ORM
-# i really wanted to minimize boilerplate here but I could'nt avoid those the extra lines
-# ie User.makeTable()
 
 
 class User(Columns):

@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 
-Welcome to LambdaQuery!
+Welcome to λQuery!
 =======================================
 
 .. toctree::

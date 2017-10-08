@@ -97,8 +97,7 @@ def sql(self, display=True, reduce=True, subquery=False, debug=False, correlated
     if reduce: reduceQuery(self, debug=debug)
     
     if self in self.getTables():
-        print("INFINITE LOOP")
-        return
+        raise EnvironmentError("INFINITE LOOP")
     
     # ==SELECT...
     selects = self.columns.items().sort(lambda x: x[1].isagg())

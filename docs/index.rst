@@ -10,8 +10,15 @@ Welcome to LambdaQuery!
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+   
+   motivation
+   start
+   query
+   properties
+   advanced
+   faq
 
-This is a library that enables one to write composable SQL in pure python. It is heavily functional, enabling one to chain query combinators in incidentally very similar to the `Rabbit query language: <https://arxiv.org/abs/1702.08409>`_. 
+This is a library that enables one to write composable SQL in pure python. It is heavily functional, enabling one to chain query combinators in incidentally very similar to the `Rabbit query language <https://arxiv.org/abs/1702.08409>`_. 
 
 The question that we solve - why is writing SQL so hard? How is it that something describable in two sentences in English becomes a monster of a query? How does one not become lost navigating the scoping rules and the throwaway names that become rampant when you have more than one layer of aggregation? LambdaQuery is the answer.
 
@@ -38,12 +45,8 @@ The main goals of LambdaQuery are to be a query API that:
 * Minimize boilerplate - setting up tables should be as easy as it is in SQLAlchemy. 
 
 
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+Contributing
+------------
 
 If you have a question then please raise an issue on Github `here <https://github.com/xnmp/lambdaquery/issues/>`_. 
 

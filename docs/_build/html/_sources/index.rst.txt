@@ -10,6 +10,13 @@ Welcome to LambdaQuery!
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+   
+   motivation
+   start
+   query
+   properties
+   advanced
+   faq
 
 This is a library that enables one to write composable SQL in pure python. It is heavily functional, enabling one to chain query combinators in incidentally very similar to the `Rabbit query language: <https://arxiv.org/abs/1702.08409>`_. 
 

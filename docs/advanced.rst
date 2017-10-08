@@ -1,18 +1,22 @@
 
+Advanced
+=========
+
+
 Grouping By
-=======================================
+-----------
 
 Grouping by
 
 
 Last Before
-==================
+-----------
 
 
 
 
 Using Kleisli and Lifted
-============================
+------------------------
 
 If you wrap these you get a few benefits:
 * The resulting columns have more readable names

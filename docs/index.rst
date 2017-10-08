@@ -9,7 +9,7 @@ Welcome to LambdaQuery!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Contents
    
    motivation
    start

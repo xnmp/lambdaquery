@@ -47,8 +47,9 @@
 </div>
 <p>This is a library that enables one to write composable SQL in pure python. It is heavily functional, enabling one to chain query combinators in incidentally very similar to the <a class="reference external" href="https://arxiv.org/abs/1702.08409">Rabbit query language:</a>.</p>
 <p>The question that we solve - why is writing SQL so hard? How is it that something describable in two sentences in English becomes a monster of a query? How does one not become lost navigating the scoping rules and the throwaway names that become rampant when you have more than one layer of aggregation? LambdaQuery is the answer.</p>
-<p>The main goals of LambdaQuery are to be a query API that:
-* Removes as much syntactic noise as possible.</p>
+<p>The main goals of LambdaQuery are to be a query API that:</p>
+<ul>
+<li><p class="first">Removes as much syntactic noise as possible.</p>
 <blockquote>
 <div><ul class="simple">
 <li>Joining by foreign keys automatically.</li>
@@ -58,7 +59,7 @@
 <li>Knows which relationships are one to one, and choosing the group bys appropriately to preserve structure of the rows.</li>
 </ul>
 </div></blockquote>
-<ul>
+</li>
 <li><p class="first">Syntax that is very similar to manipulating in-memory Python lists.</p>
 <blockquote>
 <div><ul class="simple">
@@ -75,8 +76,9 @@
 </ul>
 </div></blockquote>
 </li>
+<li><p class="first">Minimize boilerplate - setting up tables should be as easy as it is in SQLAlchemy.</p>
+</li>
 </ul>
-<p><a href="#id1"><span class="problematic" id="id2">*</span></a>Minimize boilerplate - setting up tables should be as easy as it is in SQLAlchemy.</p>
 </div>
 <div class="section" id="indices-and-tables">
 <h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
@@ -85,7 +87,7 @@
 <li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
 <li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
 </ul>
-<p>If you have a question then please raise an issue on Github <a class="reference external" href="https://github.com/xnmp/lambdaquery/issues/">here:</a>.</p>
+<p>If you have a question then please raise an issue on Github <a class="reference external" href="https://github.com/xnmp/lambdaquery/issues/">here</a>.</p>
 </div>
 
 

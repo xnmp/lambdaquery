@@ -16,6 +16,7 @@ This is a library that enables one to write composable SQL in pure python. It is
 The question that we solve - why is writing SQL so hard? How is it that something describable in two sentences in English becomes a monster of a query? How does one not become lost navigating the scoping rules and the throwaway names that become rampant when you have more than one layer of aggregation? LambdaQuery is the answer.
 
 The main goals of LambdaQuery are to be a query API that:
+
 * Removes as much syntactic noise as possible. 
     
     * Joining by foreign keys automatically.
@@ -34,7 +35,7 @@ The main goals of LambdaQuery are to be a query API that:
     * Define functions from rows to rows (a one-to-one relationship), from rows to lists (a one-to-many relationship), from lists to lists, or lists to rows (aggregation). 
     * Such functions can include data from other tables. 
     
-*Minimize boilerplate - setting up tables should be as easy as it is in SQLAlchemy. 
+* Minimize boilerplate - setting up tables should be as easy as it is in SQLAlchemy. 
 
 
 Indices and tables
@@ -44,6 +45,6 @@ Indices and tables
 * :ref:`modindex`
 * :ref:`search`
 
-If you have a question then please raise an issue on Github `here: <https://github.com/xnmp/lambdaquery/issues/>`_. 
+If you have a question then please raise an issue on Github `here <https://github.com/xnmp/lambdaquery/issues/>`_. 
 
 

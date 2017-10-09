@@ -2,6 +2,7 @@ from copy import copy, deepcopy
 from datetime import timedelta
 from lenses import lens
 from functools import reduce
+import inspect
 import datetime as dt
 # import pandas as pd
 # import numpy as np

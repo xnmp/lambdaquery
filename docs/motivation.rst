@@ -1,9 +1,9 @@
-.. LambdaQuery documentation master file, created by
-   sphinx-quickstart on Sat Oct  7 18:35:07 2017.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
-Shortcomings of SQL
-=======================================
+Motivation
+==========
 
 SQL is a pain in the ass to write. 
+
+Shortcomings of SQL
+--------------------
+
+

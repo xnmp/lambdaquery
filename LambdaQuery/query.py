@@ -214,6 +214,9 @@ class Query(Table, Monad):
         return res
     
     
+    def agg(self, *args, **kwargs):
+        return self.aggregate(*args, **kwargs)
+    
     def distinct(self, *args):
         res = self.columns.deepcopy()
         source = copy(self)
@@ -225,8 +228,9 @@ class Query(Table, Monad):
             res.groupbys = res.values()
         else:
             for key, expr in res.items():
-                res[key] = BaseExpr(expr.fieldname, source)
-            source.columns = BaseExpr('*', source.columns.getTables()[0]).asCols()
+                res[key] = BaseExpr(expr.fieldname, source.columns.getTables()[0]) #, source)
+            # source.columns = BaseExpr('*', source.columns.getTables()[0]).asCols()
+            source.columns = source.columns.getTables()[0].primaryExpr().asCols()
             res.groupbys = source.groupbys.fmap(lambda x: x.setSource(source, x.getTables()))
         return Query.unit(res)
     
@@ -348,12 +352,6 @@ class Query(Table, Monad):
         return res
     
     
-    def join(self, other, cond):
-        res = other.filter(lambda x: cond(self, x))
-        res.groupbys = self.groupbys + res.groupbys
-        return res
-    
-    
     def filter(self, cond=None):
         res = copy(self)
         
@@ -411,6 +409,7 @@ class Query(Table, Monad):
                 res.columns = rescolumns
         return res
     
+    
     def groupby(self, *args):
         # explicit group by - add it one level back
         newgroups = L(*args).bind(lambda x: x(self.columns).values() if hasattr(x, '__call__') else x.values())
@@ -434,7 +433,7 @@ class Query(Table, Monad):
 
 # %% ^━━━━━━━━━━━━━━━━━━━━━ THE HEAVY LIFTER ━━━━━━━━━━━━━━━━━━━━━━━^
 
-def addQuery(self, other, addcols='both'):
+def addQuery(self, other, addcols='both', debug=False):
     
     res, othercopy = copy(self), copy(other)
     

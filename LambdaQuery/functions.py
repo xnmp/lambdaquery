@@ -175,9 +175,9 @@ class Lifted(object):
 class Kleisli(object):
     def __init__(self, func):        
         self.func = augment(func)
-        setattr(Columns, func.__name__ + '_', self.func)
+        setattr(Columns, func.__name__, self.func)
         setattr(Query, func.__name__, lambda x: x.bind(self.func))
-    def __call__(self, *args, **kwargs):        
+    def __call__(self, *args, **kwargs):
         return self.func(*args, **kwargs)
 
 

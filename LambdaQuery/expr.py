@@ -289,6 +289,8 @@ class BaseExpr(Expr):
         return L(self.table)
     def isagg(self):
         return False
+    def asCols(self):
+        return Columns({self.fieldname: self})
     
 
 
@@ -745,4 +747,12 @@ class Columns(dict):
         resgroupbys = copy(res.groupbys)
         resgroupbys.pop()
         res.groupbys = resgroupbys
+        return res
+
+
+    def join(self, other, cond):
+        if inspect.isclass(other):
+            other = other.query()
+        res = other.filter(cond)#lambda x: cond(self, x))
+        res.groupbys = self.groupbys + res.groupbys
         return res

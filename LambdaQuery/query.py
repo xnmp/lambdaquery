@@ -49,10 +49,10 @@ class Query(Table, Monad):
         res.groupbys += other.groupbys
         return res
     
-    def __getitem__(self, col):
-        if isinstance(col, list):
-            return self.fmap(lambda x: L(*col).fmap(lambda y: getattr(x, y)).fold(lambda y, z: y % z))
-        return self.fmap(lambda x: getattr(x, col))
+    def __getitem__(self, cols):
+        if not isinstance(cols, str):
+            return self.fmap(lambda x: L(*cols).fmap(lambda y: getattr(x, y)).fold(lambda y, z: y % z))
+        return self.fmap(lambda x: getattr(x, cols))
     
     def getPrimary(self):
         for key, expr in self.columns.items():

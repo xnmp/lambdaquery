@@ -419,7 +419,7 @@ def canMerge(self, subquery=False):
                    .notExists()
     if not subquery and self.isagg():
         subq = self.columns.values().filter(lambda x: not x.isagg() and x.getRef().isagg()).notExists()
-    else:        
+    else:
         subq = True
     
     return canmerge and self.allExprs().filter(lambda x: isInvalid(x)).notExists() and subq

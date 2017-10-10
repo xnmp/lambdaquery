@@ -7,7 +7,12 @@ setup(
     author='Chong Wang',
     author_email='chonw89@gmail.com',
     packages=['LambdaQuery'],
-    url=['https://github.com/xnmp/lambdaquery'],
+    license='MIT',
+    # url=['https://github.com/xnmp/lambdaquery'],
     setup_requires=['lenses'],
-    install_requires=['lenses']
+    keywords='databases query sql orm',
+    install_requires=['lenses'],
+    python_requires='>=3.6'
 )
+
+# python setup.py sdist upload

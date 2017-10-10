@@ -39,9 +39,24 @@ This is summarized in the following diagram:
 The Query Object
 ----------------
 
-Tables are set up in the "Examples" folder. 
+Tables are set up in the "Examples" folder of the github repo located at https://github.com/xnmp/lambdaquery. The boilerplate code should be fairly self-explanatory and it's worth glancing over it to see the syntax. 
 
 Use the `Query.sql` method to display the SQL of a query. 
+
+:: code-block:: python
+
+    ex1 = School.query()
+    print(ex1.sql())
+
+This will give the result:
+
+.. code-block:: mysql
+
+    SELECT DISTINCT 
+      sc_kda8.school_code AS code, 
+      sc_kda8.name AS name, 
+      sc_kda8.campus AS campus
+    FROM school AS sc_kda8
 
 
 Selecting

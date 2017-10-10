@@ -162,8 +162,11 @@ def ex18():
 
 @do(Query)
 def ex19():
-    sc0 = yield School.query(lambda x: x.programs(lambda y: y.title == x.name).count() >= 5)
+    sc0 = yield School.query(lambda x: x.programs(lambda y: y.title == x.name)
+                                        .count() >= 5)
     returnM (
              sc0.name,
-             sc0.departments().fmap(lambda x: x.courses(lambda y: y.credits > 3).count()).lj().avg()
+             sc0.departments()
+                .fmap(lambda x: x.courses(lambda y: y.credits > 3).count())
+                .lj().avg()
             )

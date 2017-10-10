@@ -344,11 +344,15 @@ Here we go::
 
     @do(Query)
     def ex19():
-        sc0 = yield School.query(lambda x: x.programs(lambda y: y.title == x.name).count() >= 5)
+        sc0 = yield School.query(lambda x: x.programs(lambda y: y.title == x.name)
+                                            .count() >= 5)
         returnM (
                  sc0.name,
-                 sc0.departments().fmap(lambda x: x.courses(lambda y: y.credits > 3).count()).lj().avg()
+                 sc0.departments()
+                    .fmap(lambda x: x.courses(lambda y: y.credits > 3).count())
+                    .lj().avg()
                 )
+
 
 Generated SQL:
 
@@ -383,3 +387,5 @@ Generated SQL:
         AND (prog_copy_q6g8.title = query_hw2g.reroute_hx8g)
     GROUP BY 1
     HAVING (COUNT(DISTINCT prog_copy_q6g8.prog_code) >= 5)
+
+One of the things to iron out in future versions is the redundant condition ``HAVING (COUNT(DISTINCT prog_copy_q6g8.prog_code) >= 5)``  appearing in both the innermost query and the outermost query. 

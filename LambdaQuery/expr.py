@@ -269,7 +269,12 @@ class Expr(object):
             return self.table.columns[self.fieldname]
         else:
             return BaseExpr(self.fieldname, self.table.columns.getTables()[0])
-        
+    
+    def getRefBase(self):
+        res = copy(self)
+        while res != res.getRef():
+            res = res.getRef()
+        return res
 
 
 class BaseExpr(Expr):

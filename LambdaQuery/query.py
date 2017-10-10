@@ -395,11 +395,14 @@ class Query(Table, Monad):
         #     res.leftjoin = True
         #     return res
         
-        ljtables = res.columns.getTables() + self.dependents()
+        ljtables = res.columns.fmap(lambda x: x.getRef()).getTables() + self.dependents()
         for tab in ljtables:
             tab.leftjoin = True
         
         res.modify(lambda x: x.setWhere(False) if x.getTables() ^ ljtables else x, 'joincond')
+        for subq in res.subQueries():
+            subq.modify(lambda x: x.setWhere(False) if x.getTables() ^ ljtables else x, 'joincond')
+        
         # res.modify(lambda x: x.setWhere(False), 'joincond')
         # ifcond = res.joincond.children.filter(lambda x: x.getTables() <= res.dependents())
         

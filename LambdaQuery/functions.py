@@ -267,7 +267,7 @@ def in_(expr, *inlist):
     return f"{expr} IN {inlist}"
 @sqlfunc
 def like_(expr1, likestr=None):
-    return f"{expr1} LIKE \'%{likestr}%\'"
+    return f"{expr1} LIKE {likestr}"
 @sqlfunc
 def ilike_(expr1, likestr=None):
     return f"{expr1} ILIKE \'%{likestr}%\'"

@@ -20,5 +20,4 @@ Use Kleisli decorator
 Composition
 ===========
 
-
-
+We can freely compose these functions. 

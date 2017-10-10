@@ -45,55 +45,333 @@
             
   <div class="section" id="querying">
 <h1>Querying<a class="headerlink" href="#querying" title="Permalink to this headline">¶</a></h1>
+<p>For this we&#8217;re going to be using the same examples as can be found <a class="reference external" href="http://htsql.org/doc/overview.html">here</a>. That is we have a database for a university, with four tables:</p>
+<ul>
+<li><p class="first">Schools - a university may have several schools, for example the school of science, the school of arts, and the school of business. The school table has the following columns:</p>
+<blockquote>
+<div><ul class="simple">
+<li>A code (primary key)</li>
+<li>A name</li>
+<li>A campus - north campus, south campus, etc.</li>
+</ul>
+</div></blockquote>
+</li>
+<li><p class="first">Programs - each school may offer several programs, or degrees - a bachelor of commerse, a bachelor of arts, or a master of arts. The program title has the following columns:</p>
+<blockquote>
+<div><ul class="simple">
+<li>A code (primary key)</li>
+<li>A school code (foreign key)</li>
+<li>A title (e.g. bachelor of commerce)</li>
+<li>A degree type - bachelor&#8217;s, masters, phd, etc.</li>
+</ul>
+</div></blockquote>
+</li>
+<li><p class="first">Departments - for example, the physics department might be a part of the school of science. Each department has:</p>
+<blockquote>
+<div><ul class="simple">
+<li>A code (primary key)</li>
+<li>A name</li>
+<li>A school code (foreign key)</li>
+</ul>
+</div></blockquote>
+</li>
+<li><p class="first">Courses - Departments offer courses, this is pretty self explanatory. each course has</p>
+<blockquote>
+<div><ul class="simple">
+<li>A course code (primary key)</li>
+<li>A department code (foreign key)</li>
+<li>A number of credits</li>
+<li>A description</li>
+<li>A title</li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+<p>This is summarized in the following diagram:</p>
 <img alt="_images/schema.png" src="_images/schema.png" />
-<table border="1" class="colwidths-given docutils" id="id1">
-<caption><span class="caption-text">Frozen Delights!</span><a class="headerlink" href="#id1" title="Permalink to this table">¶</a></caption>
-<colgroup>
-<col width="27%" />
-<col width="18%" />
-<col width="55%" />
-</colgroup>
-<thead valign="bottom">
-<tr class="row-odd"><th class="head">Treat</th>
-<th class="head">Quantity</th>
-<th class="head">Description</th>
-</tr>
-</thead>
-<tbody valign="top">
-<tr class="row-even"><td>Albatross</td>
-<td>2.99</td>
-<td>On a stick!</td>
-</tr>
-<tr class="row-odd"><td>Crunchy Frog</td>
-<td>1.49</td>
-<td>If we took the bones out, it wouldn&#8217;t be
-crunchy, now would it?</td>
-</tr>
-<tr class="row-even"><td>Gannet Ripple</td>
-<td>1.99</td>
-<td>On a stick!</td>
-</tr>
-</tbody>
-</table>
-<div class="section" id="selecting">
-<h2>Selecting<a class="headerlink" href="#selecting" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="the-query-object">
+<h2>The Query Object<a class="headerlink" href="#the-query-object" title="Permalink to this headline">¶</a></h2>
+<p>Tables are set up in the &#8220;Examples&#8221; folder of the github repo located at <a class="reference external" href="https://github.com/xnmp/lambdaquery">https://github.com/xnmp/lambdaquery</a>. The boilerplate code should be fairly self-explanatory and it&#8217;s worth glancing over it to see the syntax.</p>
+<p>Use the <code class="docutils literal"><span class="pre">Query.sql</span></code> method to display the SQL of a query.</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">ex1</span> <span class="o">=</span> <span class="n">School</span><span class="o">.</span><span class="n">query</span><span class="p">()</span>
+<span class="k">print</span><span class="p">(</span><span class="n">ex1</span><span class="o">.</span><span class="n">sql</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>This will give the result:</p>
+<div class="highlight-mysql"><div class="highlight"><pre><span></span><span class="k">SELECT</span> <span class="k">DISTINCT</span>
+  <span class="n">sc_kda8</span><span class="p">.</span><span class="n">school_code</span> <span class="k">AS</span> <span class="n">code</span><span class="p">,</span>
+  <span class="n">sc_kda8</span><span class="p">.</span><span class="n">name</span> <span class="k">AS</span> <span class="n">name</span><span class="p">,</span>
+  <span class="n">sc_kda8</span><span class="p">.</span><span class="n">campus</span> <span class="k">AS</span> <span class="n">campus</span>
+<span class="k">FROM</span> <span class="n">school</span> <span class="k">AS</span> <span class="n">sc_kda8</span>
+</pre></div>
+</div>
 </div>
 <div class="section" id="filtering">
 <h2>Filtering<a class="headerlink" href="#filtering" title="Permalink to this headline">¶</a></h2>
-<p>Use the .filter</p>
+<p>Use the <code class="docutils literal"><span class="pre">.filter</span></code> method to filter:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">School</span><span class="o">.</span><span class="n">query</span><span class="p">()</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">campus</span> <span class="o">==</span> <span class="s1">&#39;south&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Since this construction is so common, this can be abbreviated down to:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">School</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">campus</span> <span class="o">==</span> <span class="s1">&#39;south&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The resulting SQL looks like:</p>
+<div class="highlight-mysql"><div class="highlight"><pre><span></span><span class="k">SELECT</span> <span class="k">DISTINCT</span>
+  <span class="n">sc_pob4</span><span class="p">.</span><span class="n">school_code</span> <span class="k">AS</span> <span class="n">code</span><span class="p">,</span>
+  <span class="n">sc_pob4</span><span class="p">.</span><span class="n">name</span> <span class="k">AS</span> <span class="n">name</span><span class="p">,</span>
+  <span class="n">sc_pob4</span><span class="p">.</span><span class="n">campus</span> <span class="k">AS</span> <span class="n">campus</span>
+<span class="k">FROM</span> <span class="n">school</span> <span class="k">AS</span> <span class="n">sc_pob4</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="n">sc_pob4</span><span class="p">.</span><span class="n">campus</span> <span class="o">=</span> <span class="s1">&#39;south&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="selecting">
+<h2>Selecting<a class="headerlink" href="#selecting" title="Permalink to this headline">¶</a></h2>
+<p>To demonstrate selecting, we use the <code class="docutils literal"><span class="pre">fmap</span></code> method of the query object. Again, we can think of a query like a list, and the <code class="docutils literal"><span class="pre">fmap</span></code> method is like mapping a function over that list. Selection looks like:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">School</span><span class="o">.</span><span class="n">query</span><span class="p">()</span><span class="o">.</span><span class="n">fmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">name</span> <span class="o">%</span> <span class="n">x</span><span class="o">.</span><span class="n">campus</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here we can think of the query as a list of dictionaries where the entries of the dictionary can be accessed by using an attribute name. The <code class="docutils literal"><span class="pre">%</span></code> operator herre can be thought of the operator that combinbes two dictionaries.</p>
+<p>Note that because this is so common, a simpler way to do this is via the <code class="docutils literal"><span class="pre">getitem</span></code> method as follows:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">School</span><span class="o">.</span><span class="n">query</span><span class="p">()[</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="s1">&#39;campus&#39;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>This will give the result:</p>
+<div class="highlight-mysql"><div class="highlight"><pre><span></span><span class="k">SELECT</span> <span class="k">DISTINCT</span>
+  <span class="n">sc_pob4</span><span class="p">.</span><span class="n">name</span> <span class="k">AS</span> <span class="n">name</span><span class="p">,</span>
+  <span class="n">sc_pob4</span><span class="p">.</span><span class="n">campus</span> <span class="k">AS</span> <span class="n">campus</span>
+<span class="k">FROM</span> <span class="n">school</span> <span class="k">AS</span> <span class="n">sc_pob4</span>
+</pre></div>
+</div>
+<p>Now there&#8217;s always several ways to do things in LambdaQuery, and its strength lies in using a generator function to &#8220;unroll&#8221; a query. We can do this via the <code class="docutils literal"><span class="pre">yield</span></code> keyword, so that when we write <code class="docutils literal"><span class="pre">sc0</span> <span class="pre">=</span> <span class="pre">yield</span> <span class="pre">School.query()</span></code> this can be thought of as <code class="docutils literal"><span class="pre">for</span> <span class="pre">sc0</span> <span class="pre">in</span> <span class="pre">School.query():</span></code>. Then <code class="docutils literal"><span class="pre">sc0</span></code> is a single school, and we can apply functions that work on single schools to <code class="docutils literal"><span class="pre">sc0</span></code>, such as, say, the number of departments it has.</p>
+<p>For reference, the above is written using the generator function as:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="nd">@do</span><span class="p">(</span><span class="n">Query</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">ex4</span><span class="p">():</span>
+    <span class="n">sc0</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">School</span><span class="o">.</span><span class="n">query</span><span class="p">()</span>
+    <span class="n">returnM</span> <span class="p">(</span><span class="n">sc0</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">sc0</span><span class="o">.</span><span class="n">campus</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>which may be read as &#8220;for each school, return its name and campus&#8221;.</p>
 </div>
 <div class="section" id="joining">
 <h2>Joining<a class="headerlink" href="#joining" title="Permalink to this headline">¶</a></h2>
-<p>Use the <cite>join</cite> method. Most of this is already done by the foreign keys.</p>
+<p>Joining is very simple when we only have one foreign key. For example, if we have a school <code class="docutils literal"><span class="pre">sc0</span></code> and we want its departments, then this is simply <code class="docutils literal"><span class="pre">sc0.departments()</span></code> which is itself a query object. Note the open-and-close bracket at the end - this is to signify a one-to-many relationship. For a one-to-one relationship such as the school of a department <code class="docutils literal"><span class="pre">dept0</span></code>, we don&#8217;t need the brackets and this is just <code class="docutils literal"><span class="pre">dept0.school</span></code>.</p>
+<p>For example, suppose we wanted:</p>
+<blockquote>
+<div>for each department, return its name, the name of its school, and the campus of its school.</div></blockquote>
+<p>This is written as:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="nd">@do</span><span class="p">(</span><span class="n">Query</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">ex6</span><span class="p">():</span>
+    <span class="n">dept0</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">Department</span><span class="o">.</span><span class="n">query</span><span class="p">()</span>
+    <span class="n">returnM</span> <span class="p">(</span>
+             <span class="n">dept0</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+             <span class="n">dept0</span><span class="o">.</span><span class="n">school</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+             <span class="n">dept0</span><span class="o">.</span><span class="n">school</span><span class="o">.</span><span class="n">campus</span>
+            <span class="p">)</span>
+</pre></div>
 </div>
-<div class="section" id="left-joins">
-<h2>Left Joins<a class="headerlink" href="#left-joins" title="Permalink to this headline">¶</a></h2>
-<p>left joining dependents</p>
+<p>And the SQL generated is:</p>
+<div class="highlight-mysql"><div class="highlight"><pre><span></span><span class="k">SELECT</span> <span class="k">DISTINCT</span>
+  <span class="n">dept_ilso</span><span class="p">.</span><span class="n">name</span> <span class="k">AS</span> <span class="n">name</span><span class="p">,</span>
+  <span class="n">sc_im20</span><span class="p">.</span><span class="n">name</span> <span class="k">AS</span> <span class="n">name0</span><span class="p">,</span>
+  <span class="n">sc_im20</span><span class="p">.</span><span class="n">campus</span> <span class="k">AS</span> <span class="n">campus</span>
+<span class="k">FROM</span> <span class="n">department</span> <span class="k">AS</span> <span class="n">dept_ilso</span>
+  <span class="k">JOIN</span> <span class="n">school</span> <span class="k">AS</span> <span class="n">sc_im20</span> <span class="k">ON</span> <span class="p">(</span><span class="n">sc_im20</span><span class="p">.</span><span class="n">school_code</span> <span class="o">=</span> <span class="n">dept_ilso</span><span class="p">.</span><span class="n">school_code</span><span class="p">)</span>
+</pre></div>
+</div>
 </div>
 </div>
 <div class="section" id="aggregation">
 <h1>Aggregation<a class="headerlink" href="#aggregation" title="Permalink to this headline">¶</a></h1>
-<p>min by primary key</p>
+<p>Now the query object has the <code class="docutils literal"><span class="pre">min</span></code>, <code class="docutils literal"><span class="pre">max</span></code>, <code class="docutils literal"><span class="pre">avg</span></code>, <code class="docutils literal"><span class="pre">sum</span></code>, and <code class="docutils literal"><span class="pre">count</span></code> methods, which collapse a query down into one number. So suppose for each school, we want the number of departments. This is written as:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="nd">@do</span><span class="p">(</span><span class="n">Query</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">ex5</span><span class="p">():</span>
+    <span class="n">sc0</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">School</span><span class="o">.</span><span class="n">query</span><span class="p">()</span>
+    <span class="n">returnM</span> <span class="p">(</span>
+             <span class="n">sc0</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+             <span class="n">sc0</span><span class="o">.</span><span class="n">departments</span><span class="p">()</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
+            <span class="p">)</span>
+</pre></div>
+</div>
+<p>The generated SQL is:</p>
+<div class="highlight-mysql"><div class="highlight"><pre><span></span><span class="k">SELECT</span>
+  <span class="n">sc_xzqo</span><span class="p">.</span><span class="n">name</span> <span class="k">AS</span> <span class="n">name</span><span class="p">,</span>
+  <span class="nf">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span> <span class="n">dept_y04o</span><span class="p">.</span><span class="n">dept_code</span><span class="p">)</span> <span class="k">AS</span> <span class="n">count_code</span>
+<span class="k">FROM</span> <span class="n">school</span> <span class="k">AS</span> <span class="n">sc_xzqo</span>
+  <span class="k">JOIN</span> <span class="n">department</span> <span class="k">AS</span> <span class="n">dept_y04o</span> <span class="k">ON</span> <span class="p">(</span><span class="n">dept_y04o</span><span class="p">.</span><span class="n">school_code</span> <span class="o">=</span> <span class="n">sc_xzqo</span><span class="p">.</span><span class="n">school_code</span><span class="p">)</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<div class="section" id="encapsulation">
+<h2>Encapsulation<a class="headerlink" href="#encapsulation" title="Permalink to this headline">¶</a></h2>
+<p>Here we get our first glimpse into the enormous amount of composability offered by LambdaQuery. We can write the above a function as follows:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">num_dept</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">departments</span><span class="p">()</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>And now the above can be written as:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="nd">@do</span><span class="p">(</span><span class="n">Query</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">ex5</span><span class="p">():</span>
+    <span class="n">sc0</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">School</span><span class="o">.</span><span class="n">query</span><span class="p">()</span>
+    <span class="n">returnM</span> <span class="p">(</span>
+             <span class="n">sc0</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+             <span class="n">num_dept</span><span class="p">(</span><span class="n">sc0</span><span class="p">)</span>
+            <span class="p">)</span>
+</pre></div>
+</div>
+<p>If we want to use it as if it were an attribute, then we need to use the <code class="docutils literal"><span class="pre">&#64;injective</span></code> decorator:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="nd">@injective</span><span class="p">()</span>
+<span class="k">def</span> <span class="nf">num_dept</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">departments</span><span class="p">()</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>This enables us to write:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="nd">@do</span><span class="p">(</span><span class="n">Query</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">ex5</span><span class="p">():</span>
+    <span class="n">sc0</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">School</span><span class="o">.</span><span class="n">query</span><span class="p">()</span>
+    <span class="n">returnM</span> <span class="p">(</span>
+             <span class="n">sc0</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+             <span class="n">sc0</span><span class="o">.</span><span class="n">num_dept</span>
+            <span class="p">)</span>
+</pre></div>
+</div>
+<p>In fact, as before we can now write <code class="docutils literal"><span class="pre">School.query()['name','num_dept']</span></code> to get the same result.</p>
+<p>We can even filter on this: <code class="docutils literal"><span class="pre">School.query(lambda</span> <span class="pre">x:</span> <span class="pre">x.num_dept</span> <span class="pre">&gt;</span> <span class="pre">3)</span></code> returns the SQL:</p>
+<div class="highlight-mysql"><div class="highlight"><pre><span></span><span class="k">SELECT</span>
+  <span class="n">sc_7488</span><span class="p">.</span><span class="n">school_code</span> <span class="k">AS</span> <span class="n">code</span><span class="p">,</span>
+  <span class="n">sc_7488</span><span class="p">.</span><span class="n">name</span> <span class="k">AS</span> <span class="n">name</span><span class="p">,</span>
+  <span class="n">sc_7488</span><span class="p">.</span><span class="n">campus</span> <span class="k">AS</span> <span class="n">campus</span>
+<span class="k">FROM</span> <span class="n">school</span> <span class="k">AS</span> <span class="n">sc_7488</span>
+  <span class="k">JOIN</span> <span class="n">department</span> <span class="k">AS</span> <span class="n">dept_751s</span> <span class="k">ON</span> <span class="p">(</span><span class="n">dept_751s</span><span class="p">.</span><span class="n">school_code</span> <span class="o">=</span> <span class="n">sc_7488</span><span class="p">.</span><span class="n">school_code</span><span class="p">)</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span>
+<span class="k">HAVING</span> <span class="p">(</span><span class="nf">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span> <span class="n">dept_751s</span><span class="p">.</span><span class="n">dept_code</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">3</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In every respect the <code class="docutils literal"><span class="pre">num_dept</span></code> property that we have just defined may be treated as if it were just another column.</p>
+</div>
+<div class="section" id="explicit-grouping-by">
+<h2>Explicit Grouping By<a class="headerlink" href="#explicit-grouping-by" title="Permalink to this headline">¶</a></h2>
+<p>Grouping by is a matter of using the functions <code class="docutils literal"><span class="pre">max_</span></code>, <code class="docutils literal"><span class="pre">min_</span></code>, <code class="docutils literal"><span class="pre">count_</span></code> (with an underscore). Note that these functions take a single row to a single row, and are the only cases of breaking the intuition of thinking of queries as lists. Such functions should only be used inside the <code class="docutils literal"><span class="pre">returnM</span></code>.</p>
+<p>Suppose we wanted to get the average number of credits of courses with a code that begins with &#8220;100&#8221;. This looks like:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="nd">@do</span><span class="p">(</span><span class="n">Query</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">ex8</span><span class="p">():</span>
+    <span class="n">cs0</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">Course</span><span class="o">.</span><span class="n">query</span><span class="p">()</span>
+    <span class="n">returnM</span> <span class="p">(</span>
+             <span class="n">cs0</span><span class="o">.</span><span class="n">no</span><span class="o">.</span><span class="n">like_</span><span class="p">(</span><span class="s1">&#39;100%&#39;</span><span class="p">),</span>
+             <span class="n">cs0</span><span class="o">.</span><span class="n">credits</span><span class="o">.</span><span class="n">avg_</span><span class="p">()</span>
+            <span class="p">)</span>
+</pre></div>
+</div>
+<p>Generated SQL:</p>
+<div class="highlight-mysql"><div class="highlight"><pre><span></span><span class="k">SELECT</span>
+  <span class="n">course_ie1k</span><span class="p">.</span><span class="n">course_code</span> <span class="k">LIKE</span> <span class="s1">&#39;100%&#39;</span> <span class="k">AS</span> <span class="n">like_no</span><span class="p">,</span>
+  <span class="nf">AVG</span><span class="p">(</span><span class="nf">COALESCE</span><span class="p">(</span><span class="n">course_ie1k</span><span class="p">.</span><span class="n">credits</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span> <span class="k">AS</span> <span class="n">avg_credits</span>
+<span class="k">FROM</span> <span class="n">course</span> <span class="k">AS</span> <span class="n">course_ie1k</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="mi">1</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="left-joining">
+<h1>Left Joining<a class="headerlink" href="#left-joining" title="Permalink to this headline">¶</a></h1>
+<p>This is a matter of using the <code class="docutils literal"><span class="pre">lj</span></code> method. Intuitively, this turns an empty list into a list containing a single null value, and keeps every other list the same.</p>
+<p>For example, suppose we want</p>
+<blockquote>
+<div>for each department, its name, and the number of courses with greater than 2 credits.</div></blockquote>
+<p>Note that it may be that a department offers no courses with greater than 2 credits, so this is a case where we need to left join. Namely:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="nd">@do</span><span class="p">(</span><span class="n">Query</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">ex15</span><span class="p">():</span>
+    <span class="n">dept0</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">Department</span><span class="o">.</span><span class="n">query</span><span class="p">()</span>
+    <span class="n">returnM</span> <span class="p">(</span>
+             <span class="n">dept0</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+             <span class="n">dept0</span><span class="o">.</span><span class="n">courses</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">credits</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">lj</span><span class="p">()</span><span class="o">.</span><span class="n">count</span><span class="p">()</span><span class="o">.</span><span class="n">coalesce_</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+            <span class="p">)</span>
+</pre></div>
+</div>
+<p>Generated SQL:</p>
+<div class="highlight-mysql"><div class="highlight"><pre><span></span><span class="k">SELECT</span>
+  <span class="n">dept_18gw</span><span class="p">.</span><span class="n">name</span> <span class="k">AS</span> <span class="n">name</span><span class="p">,</span>
+  <span class="nf">COALESCE</span><span class="p">(</span><span class="nf">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span> <span class="n">course_l_rwa0</span><span class="p">.</span><span class="n">course_code</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span> <span class="k">AS</span> <span class="n">coalesce_count_no</span>
+<span class="k">FROM</span> <span class="n">department</span> <span class="k">AS</span> <span class="n">dept_18gw</span>
+  <span class="k">LEFT</span> <span class="k">JOIN</span> <span class="n">course</span> <span class="k">AS</span> <span class="n">course_l_rwa0</span> <span class="k">ON</span> <span class="p">(</span><span class="n">course_l_rwa0</span><span class="p">.</span><span class="n">credits</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="k">AND</span> <span class="p">(</span><span class="n">course_l_rwa0</span><span class="p">.</span><span class="n">dept_code</span> <span class="o">=</span> <span class="n">dept_18gw</span><span class="p">.</span><span class="n">dept_code</span><span class="p">)</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<div class="section" id="left-joining-dependent-tables">
+<h2>Left Joining Dependent Tables<a class="headerlink" href="#left-joining-dependent-tables" title="Permalink to this headline">¶</a></h2>
+<p>One annoying thing about SQL can be seen in the following example: suppose we wanted, for each school, the number of departments that had at least one course that offered a course with at least 2 credits.</p>
+<p>We have to remember that the course table must be left joined as well, and any reference to the department table must come with the additional provisio that the course table is not null.</p>
+<p>LambdaQuery:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="nd">@do</span><span class="p">(</span><span class="n">Query</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">ex15</span><span class="p">():</span>
+    <span class="n">sc0</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">School</span><span class="o">.</span><span class="n">query</span><span class="p">()</span>
+    <span class="n">returnM</span> <span class="p">(</span>
+             <span class="n">sc0</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+             <span class="n">sc0</span><span class="o">.</span><span class="n">departments</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">courses</span><span class="p">(</span><span class="k">lambda</span> <span class="n">y</span><span class="p">:</span> <span class="n">y</span><span class="o">.</span><span class="n">credits</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">)</span>
+                             <span class="o">.</span><span class="n">exists</span><span class="p">())</span>
+                <span class="o">.</span><span class="n">lj</span><span class="p">()</span><span class="o">.</span><span class="n">count</span><span class="p">()</span><span class="o">.</span><span class="n">coalesce_</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+            <span class="p">)</span>
+</pre></div>
+</div>
+<p>The generated SQL shows that all of the preceding concerns are handled for us:</p>
+<div class="highlight-mysql"><div class="highlight"><pre><span></span><span class="k">SELECT</span>
+  <span class="n">sc_bgo0</span><span class="p">.</span><span class="n">name</span> <span class="k">AS</span> <span class="n">name</span><span class="p">,</span>
+  <span class="nf">COALESCE</span><span class="p">(</span><span class="nf">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span> <span class="k">CASE</span> <span class="k">WHEN</span> <span class="n">course_l_m7nk</span><span class="p">.</span><span class="n">course_code</span> <span class="k">IS</span> <span class="k">NOT</span> <span class="no">NULL</span> <span class="k">THEN</span> <span class="n">dept_l_m5yw</span><span class="p">.</span><span class="n">dept_code</span> <span class="n">END</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span> <span class="k">AS</span> <span class="n">coalesce_count_code</span>
+<span class="k">FROM</span> <span class="n">school</span> <span class="k">AS</span> <span class="n">sc_bgo0</span>
+  <span class="k">LEFT</span> <span class="k">JOIN</span> <span class="n">department</span> <span class="k">AS</span> <span class="n">dept_l_m5yw</span> <span class="k">ON</span> <span class="p">(</span><span class="n">dept_l_m5yw</span><span class="p">.</span><span class="n">school_code</span> <span class="o">=</span> <span class="n">sc_bgo0</span><span class="p">.</span><span class="n">school_code</span><span class="p">)</span>
+  <span class="k">LEFT</span> <span class="k">JOIN</span> <span class="n">course</span> <span class="k">AS</span> <span class="n">course_l_m7nk</span> <span class="k">ON</span> <span class="n">course_l_m7nk</span><span class="p">.</span><span class="n">course_code</span> <span class="k">IS</span> <span class="k">NOT</span> <span class="no">NULL</span>
+    <span class="k">AND</span> <span class="p">(</span><span class="n">course_l_m7nk</span><span class="p">.</span><span class="n">dept_code</span> <span class="o">=</span> <span class="n">dept_l_m5yw</span><span class="p">.</span><span class="n">dept_code</span><span class="p">)</span>
+    <span class="k">AND</span> <span class="p">(</span><span class="n">course_l_m7nk</span><span class="p">.</span><span class="n">credits</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">)</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>Pretty cool eh? This really is just the beginning. Most ORMs start getting really convoluted when you write more complex queries, and it&#8217;s usually harder than just writing raw SQL. With LambdaQuery it remains simple and intuitive, and the SQL compiler works out all the bits of SQL logic so you don&#8217;t have to.</p>
+<p>We give just one more example here as a taste, and this is about as complex as it gets using the tables that we have. Suppose we want, for each school with a course that has at least 5 programs with a title that matches the school&#8217;s name, the average number of high credit courses offered by its departments. Here a high credit course is one with greater than 3 departments.</p>
+<p>Here we go:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="nd">@do</span><span class="p">(</span><span class="n">Query</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">ex19</span><span class="p">():</span>
+    <span class="n">sc0</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">School</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">programs</span><span class="p">(</span><span class="k">lambda</span> <span class="n">y</span><span class="p">:</span> <span class="n">y</span><span class="o">.</span><span class="n">title</span> <span class="o">==</span> <span class="n">x</span><span class="o">.</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="mi">5</span><span class="p">)</span>
+    <span class="n">returnM</span> <span class="p">(</span>
+             <span class="n">sc0</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+             <span class="n">sc0</span><span class="o">.</span><span class="n">departments</span><span class="p">()</span><span class="o">.</span><span class="n">fmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">courses</span><span class="p">(</span><span class="k">lambda</span> <span class="n">y</span><span class="p">:</span> <span class="n">y</span><span class="o">.</span><span class="n">credits</span> <span class="o">&gt;</span> <span class="mi">3</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">())</span><span class="o">.</span><span class="n">lj</span><span class="p">()</span><span class="o">.</span><span class="n">avg</span><span class="p">()</span>
+            <span class="p">)</span>
+</pre></div>
+</div>
+<p>Generated SQL:</p>
+<div class="highlight-mysql"><div class="highlight"><pre><span></span>SELECT
+  query_hw2g.reroute_hx8g AS name,
+  AVG(COALESCE(query_hw2g.count_no_hw5k, 0)) AS avg_count_no
+FROM (--━━━━━━━━━━ SUBQUERY ━━━━━━━━━━--
+        SELECT
+          query_gsd4.reroute_grz4 AS reroute_hvc0,
+          query_gsd4.reroute_hx8g AS reroute_hx8g,
+          COUNT(DISTINCT course_l_hvog.course_code) AS count_no_hw5k
+        FROM (--━━━━━━━━━━ SUBQUERY ━━━━━━━━━━--
+                SELECT
+                  sc_wuvk.school_code AS reroute_grz4,
+                  sc_wuvk.name AS reroute_hx8g
+                FROM school AS sc_wuvk
+                  JOIN program AS prog_5xfs ON (prog_5xfs.school_code = sc_wuvk.school_code)
+                    AND (prog_5xfs.title = sc_wuvk.name)
+                GROUP BY 1, 2
+                HAVING (COUNT(DISTINCT prog_5xfs.prog_code) &gt;= 5)
+                --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━--
+                ) AS query_gsd4
+          JOIN department AS dept_5xs8 ON (dept_5xs8.school_code = query_gsd4.reroute_grz4)
+          LEFT JOIN course AS course_l_hvog ON (course_l_hvog.dept_code = dept_5xs8.dept_code)
+            AND (course_l_hvog.credits &gt; 3)
+        GROUP BY 1, 2, dept_5xs8.dept_code
+        --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━--
+        ) AS query_hw2g
+  JOIN program AS prog_copy_q6g8 ON (prog_copy_q6g8.school_code = query_hw2g.reroute_hvc0)
+    AND (prog_copy_q6g8.title = query_hw2g.reroute_hx8g)
+GROUP BY 1
+HAVING (COUNT(DISTINCT prog_copy_q6g8.prog_code) &gt;= 5)
+</pre></div>
+</div>
+</div>
 </div>
 
 
@@ -105,13 +383,21 @@ crunchy, now would it?</td>
   <h3><a href="index.html">Table Of Contents</a></h3>
   <ul>
 <li><a class="reference internal" href="#">Querying</a><ul>
-<li><a class="reference internal" href="#selecting">Selecting</a></li>
+<li><a class="reference internal" href="#the-query-object">The Query Object</a></li>
 <li><a class="reference internal" href="#filtering">Filtering</a></li>
+<li><a class="reference internal" href="#selecting">Selecting</a></li>
 <li><a class="reference internal" href="#joining">Joining</a></li>
-<li><a class="reference internal" href="#left-joins">Left Joins</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#aggregation">Aggregation</a></li>
+<li><a class="reference internal" href="#aggregation">Aggregation</a><ul>
+<li><a class="reference internal" href="#encapsulation">Encapsulation</a></li>
+<li><a class="reference internal" href="#explicit-grouping-by">Explicit Grouping By</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#left-joining">Left Joining</a><ul>
+<li><a class="reference internal" href="#left-joining-dependent-tables">Left Joining Dependent Tables</a></li>
+</ul>
+</li>
 </ul>
 <div class="relations">
 <h3>Related Topics</h3>

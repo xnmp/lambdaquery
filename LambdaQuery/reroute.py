@@ -530,10 +530,10 @@ def reduceQuery(self, debug=False, subquery=False):
         print(self.sql(reduce=False, debug=True))        
     
     # if the selects are left joined, then make the query left joined
-    if self.isQuery() and self.getTables().fmap(lambda x: x.leftjoin).all():        
-        self.leftjoin = True
-        for table in self.getTables():
-            table.leftjoin = False
+    # if self.isQuery() and self.getTables().fmap(lambda x: x.leftjoin).all():
+    #     self.leftjoin = True
+    #     for table in self.getTables():
+    #         table.leftjoin = False
     
     # STEP 1: MERGE SUBQUERIES WITH THE SAME GROUP BYS
     selfcopy = copy(self)

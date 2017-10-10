@@ -394,7 +394,7 @@ def isInvalid(expr):
                       .bind(lambda x: L(x) + x.descendants())\
                       .filter(lambda x: isinstance(x, AggExpr)).getTables()        
     
-    return expr.isagg() and (btables ^ innertables or btables.filter(lambda x: x.leftjoin))
+    return expr.getRef().isagg() and (btables ^ innertables or btables.filter(lambda x: x.leftjoin))
 
 def aggedTables(expr):
     return expr.children\
@@ -419,8 +419,9 @@ def canMerge(self, subquery=False):
                    .notExists()
     if not subquery and self.isagg():
         subq = self.columns.values().filter(lambda x: not x.isagg() and x.getRef().isagg()).notExists()
-    else:
+    else:        
         subq = True
+    
     return canmerge and self.allExprs().filter(lambda x: isInvalid(x)).notExists() and subq
 
 def mergeGrouped(self, debug=False, subquery=False):

@@ -2,6 +2,8 @@ Archive/*
 build/*
 dist/*
 
+Examples/__pycache__/*
+lambdaquery.egg-info/*
 LambdaQuery/__pycache__/*
 __pycache__/*
 tables.py

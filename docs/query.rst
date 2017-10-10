@@ -4,7 +4,7 @@ Querying
 
 For this we're going to be using the same examples as can be found `here <http://htsql.org/doc/overview.html>`_. That is we have a database for a university, with four tables:
 
-* Schools - a university may have several schools, for example the school of science, the school of arts, and the school of business. The school table has the fopllowing columns:
+* Schools - a university may have several schools, for example the school of science, the school of arts, and the school of business. The school table has the following columns:
 
     * A code (primary key)
     * A name
@@ -29,6 +29,7 @@ For this we're going to be using the same examples as can be found `here <http:/
     * A department code (foreign key)
     * A number of credits
     * A description
+    * A title
 
 This is summarized in the following diagram:
 

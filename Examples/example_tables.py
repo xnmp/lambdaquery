@@ -4,7 +4,6 @@ from datetime import timedelta
 
 class School(Columns):
     table = Table("school", 'sc')
-
     def __init__(self):
         School.makeTable()
         self.baseExpr("school_code", 'code', primary=True)
@@ -26,16 +25,17 @@ class Program(Columns):
         self.baseExpr("prog_code", 'code', primary=True)
         self.baseExpr("school_code", 'sc_code', foreign=School)
         self.baseExpr("title", "title")
-        self.baseExpr("type", 'type')
+        self.baseExpr("degree", 'degree')
 
 class Course(Columns):
     table = Table("course", "course")
     def __init__(self):
         Course.makeTable()
-        self.baseExpr("course_code", 'code', primary=True)
+        self.baseExpr("course_code", 'no', primary=True)
         self.baseExpr("dept_code", 'dept_code', foreign=Department)
         self.baseExpr("description", "description")
         self.baseExpr("title", "title")
+        self.baseExpr("credits", "credits")
 
 
 # ============================================================================

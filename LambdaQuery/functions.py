@@ -438,7 +438,8 @@ def between(self, bound, tlimit=None, ts='ts'):
         if tsvars:
             tsvar = tsvars[0]
         else:
-            raise AttributeError(f"No timestamp in {self}")
+            tsvar = self
+            # raise AttributeError(f"No timestamp in {self}")
     
     
     if isinstance(tlimit, Columns) or isinstance(tlimit, str) or isinstance(tlimit, dt.datetime):

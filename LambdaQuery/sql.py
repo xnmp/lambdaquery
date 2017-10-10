@@ -140,3 +140,5 @@ def p_sql(self):
     print(sql(self, reduce=False))
 LambdaQuery.query.Query.p = p_sql
 LambdaQuery.query.Query.sql = sql
+import LambdaQuery.expr
+LambdaQuery.expr.Columns.sql = lambda x: x.asQuery().sql()

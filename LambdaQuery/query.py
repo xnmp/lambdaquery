@@ -50,6 +50,8 @@ class Query(Table, Monad):
         return res
     
     def __getitem__(self, col):
+        if isinstance(col, list):
+            return self.fmap(lambda x: L(*col).fmap(lambda y: getattr(x, y)).fold(lambda y, z: y % z))
         return self.fmap(lambda x: getattr(x, col))
     
     def getPrimary(self):
@@ -240,10 +242,14 @@ class Query(Table, Monad):
     
     
     def sort(self, *args):
-        # res = copy(self)
-        # res.ordervar += L(*args)
-        # return res
-        return lens.ordervar.modify(lambda x: x + L(*args))(self)
+        res = copy(self)
+        if not hasattr(args[0], '__call__'):
+            res.ordervar += L(*args)
+        else:
+            res.ordervar += args[0](self.columns).values()        
+        return res
+        
+        # return lens.ordervar.modify(lambda x: x + cond(self))(self)
     
     
     def limit(self, n=50):

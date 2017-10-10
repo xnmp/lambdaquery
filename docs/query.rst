@@ -43,7 +43,7 @@ Tables are set up in the "Examples" folder of the github repo located at https:/
 
 Use the `Query.sql` method to display the SQL of a query. 
 
-:: code-block:: python
+.. code-block:: python
 
     ex1 = School.query()
     print(ex1.sql())

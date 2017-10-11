@@ -362,6 +362,10 @@ class FuncExpr(Expr):
         self.kwargs = kwargs
     def __repr__(self):
         return self.func(*self.children, *self.args, **self.kwargs)
+    def __eq__(self, other):
+        if isinstance(other, FuncExpr):
+            return self.children == other.children and self.func.__name__ == other.func.__name__
+        return False
 
 
 class AggExpr(FuncExpr):
@@ -380,7 +384,7 @@ class BinOpExpr(FuncExpr):
             return self.func.__name__ == other.func.__name__ \
                 and self.children.sort(lambda x: str(x)) == other.children.sort(lambda x: str(x))
         elif isinstance(other, BinOpExpr):
-            return self.__dict__ == other.__dict__
+            return self.children == other.children and self.func.__name__ == other.func.__name__
         else:
             return False
 
@@ -518,7 +522,9 @@ class Columns(dict):
         return f'Columns(dict= {dict.__repr__(self)}, joincond= {self.joincond}, groupbys= {self.groupbys})'#, primary= {self.primary})'
     
     def __mod__(self, other):
-        return updateUnique(self, other, makecopy=True)
+        res = updateUnique(self, other, makecopy=True)
+        res.joincond &= other.joincond
+        return res
     
     def __matmul__(self, other):
         return (self.asQuery() @ other.asQuery()).asCols()

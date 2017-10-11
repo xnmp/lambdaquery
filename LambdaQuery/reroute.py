@@ -383,10 +383,10 @@ def getEqExprs(table):
 
 # %% ^━━━━━━━━━━━━━━━━━ OTHER ━━━━━━━━━━━━━━━^
 
-def isInvalid(expr):
+def isInvalid(expr, isjc=False):
     # an expr that compares a table to an aggregate of that table
     # ie an expr whose children contain the table, and an expr whose getref is an aggexpr containing the same table
-    # or if it contains a left joined table then all bets are off
+    # if it's a joincond and it contains a left joined table then all bets are off
     btables = expr.getTables().filter(lambda x: x.isTable())
     innertables = expr.baseExprs()\
                       .filter(lambda x: not x.table.isTable())\
@@ -394,7 +394,7 @@ def isInvalid(expr):
                       .bind(lambda x: L(x) + x.descendants())\
                       .filter(lambda x: isinstance(x, AggExpr)).getTables()        
     
-    return expr.getRef().isagg() and (btables ^ innertables or btables.filter(lambda x: x.leftjoin))
+    return expr.getRef().isagg() and (btables ^ innertables or (btables.filter(lambda x: x.leftjoin) and isjc))
 
 def aggedTables(expr):
     return expr.children\
@@ -418,11 +418,13 @@ def canMerge(self, subquery=False):
                    .filter(lambda x: x.isagg())\
                    .notExists()
     if not subquery and self.isagg():
-        subq = self.columns.values().filter(lambda x: not x.isagg() and x.getRef().isagg()).notExists()
+        subq = self.columns.values().filter(lambda x: not x.isagg() and not x.isPrimary()).notExists()
+        # subq = self.columns.values().filter(lambda x: not x.isagg() and x.getRef().isagg()).notExists()
     else:
         subq = True
     
-    return canmerge and self.joincond.children.filter(lambda x: isInvalid(x)).notExists() and subq
+    return canmerge and self.joincond.children.filter(lambda x: isInvalid(x, isjc=True)).notExists() \
+        and subq and (self.columns.values() + self.groupbys).filter(lambda x: isInvalid(x, isjc=False)).notExists()
 
 def mergeGrouped(self, debug=False, subquery=False):
     # merge tables that have the same groupbys, because only then does it make sense to merge them

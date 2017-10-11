@@ -169,4 +169,4 @@ def ex19():
                 .lj().avg()
             )
 
-print(ex17().sql())
+print(ex19().sql(debug=True))

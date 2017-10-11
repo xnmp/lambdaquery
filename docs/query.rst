@@ -293,7 +293,7 @@ To write this out, one would usually copy and paste the column and replace the n
     def coursestart(course, start):
         return (course.no > start) & (course.no < start + 99)
 
-Note that this function can take a second argument: ``start``. Now let's use it like so:
+Note that this function can take a second argument: ``start``. Now let's use it like so::
 
     @do(Query)
     def ex17():

@@ -273,6 +273,46 @@
 </div>
 </div>
 </div>
+<div class="section" id="iteration">
+<h1>Iteration<a class="headerlink" href="#iteration" title="Permalink to this headline">¶</a></h1>
+<p>Suppose for each department, we wanted to know the number of 100 series courses it offered, and the same for 200 series, 300 series, and 400 series. In SQL, this looks like:</p>
+<div class="highlight-mysql"><div class="highlight"><pre><span></span><span class="k">SELECT</span>
+  <span class="n">dept_ek40</span><span class="p">.</span><span class="n">name</span> <span class="k">AS</span> <span class="n">name</span><span class="p">,</span>
+  <span class="nf">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span> <span class="k">CASE</span> <span class="k">WHEN</span> <span class="p">(</span><span class="n">course_fsu0</span><span class="p">.</span><span class="n">course_code</span> <span class="o">&gt;</span> <span class="mi">100</span><span class="p">)</span> <span class="k">AND</span> <span class="p">(</span><span class="n">course_fsu0</span><span class="p">.</span><span class="n">course_code</span> <span class="o">&lt;</span> <span class="mi">199</span><span class="p">)</span> <span class="k">THEN</span> <span class="n">course_fsu0</span><span class="p">.</span><span class="n">course_code</span> <span class="n">END</span><span class="p">)</span> <span class="k">AS</span> <span class="n">count_no</span><span class="p">,</span>
+  <span class="nf">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span> <span class="k">CASE</span> <span class="k">WHEN</span> <span class="p">(</span><span class="n">course_fsu0</span><span class="p">.</span><span class="n">course_code</span> <span class="o">&gt;</span> <span class="mi">200</span><span class="p">)</span> <span class="k">AND</span> <span class="p">(</span><span class="n">course_fsu0</span><span class="p">.</span><span class="n">course_code</span> <span class="o">&lt;</span> <span class="mi">299</span><span class="p">)</span> <span class="k">THEN</span> <span class="n">course_fsu0</span><span class="p">.</span><span class="n">course_code</span> <span class="n">END</span><span class="p">)</span> <span class="k">AS</span> <span class="n">count_no0</span><span class="p">,</span>
+  <span class="nf">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span> <span class="k">CASE</span> <span class="k">WHEN</span> <span class="p">(</span><span class="n">course_fsu0</span><span class="p">.</span><span class="n">course_code</span> <span class="o">&gt;</span> <span class="mi">300</span><span class="p">)</span> <span class="k">AND</span> <span class="p">(</span><span class="n">course_fsu0</span><span class="p">.</span><span class="n">course_code</span> <span class="o">&lt;</span> <span class="mi">399</span><span class="p">)</span> <span class="k">THEN</span> <span class="n">course_fsu0</span><span class="p">.</span><span class="n">course_code</span> <span class="n">END</span><span class="p">)</span> <span class="k">AS</span> <span class="n">count_no1</span><span class="p">,</span>
+  <span class="nf">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span> <span class="k">CASE</span> <span class="k">WHEN</span> <span class="p">(</span><span class="n">course_fsu0</span><span class="p">.</span><span class="n">course_code</span> <span class="o">&gt;</span> <span class="mi">400</span><span class="p">)</span> <span class="k">AND</span> <span class="p">(</span><span class="n">course_fsu0</span><span class="p">.</span><span class="n">course_code</span> <span class="o">&lt;</span> <span class="mi">499</span><span class="p">)</span> <span class="k">THEN</span> <span class="n">course_fsu0</span><span class="p">.</span><span class="n">course_code</span> <span class="n">END</span><span class="p">)</span> <span class="k">AS</span> <span class="n">count_no2</span>
+<span class="k">FROM</span> <span class="n">department</span> <span class="k">AS</span> <span class="n">dept_ek40</span>
+  <span class="k">JOIN</span> <span class="n">course</span> <span class="k">AS</span> <span class="n">course_fsu0</span> <span class="k">ON</span> <span class="p">(</span><span class="n">course_fsu0</span><span class="p">.</span><span class="n">dept_code</span> <span class="o">=</span> <span class="n">dept_ek40</span><span class="p">.</span><span class="n">dept_code</span><span class="p">)</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>To write this out, one would usually copy and paste the column and replace the number every time. We can do better. To illustrate, let&#8217;s first define a property for if the code is of a particular series number:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="nd">@Lifted</span>
+<span class="k">def</span> <span class="nf">coursestart</span><span class="p">(</span><span class="n">course</span><span class="p">,</span> <span class="n">start</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">course</span><span class="o">.</span><span class="n">no</span> <span class="o">&gt;</span> <span class="n">start</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">course</span><span class="o">.</span><span class="n">no</span> <span class="o">&lt;</span> <span class="n">start</span> <span class="o">+</span> <span class="mi">99</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Note that this function can take a second argument: <code class="docutils literal"><span class="pre">start</span></code>. Now let&#8217;s use it like so:</p>
+<blockquote>
+<div><p>&#64;do(Query)
+def ex17():</p>
+<blockquote>
+<div><p>dept0 = yield Department.query()
+returnM (</p>
+<blockquote>
+<div><blockquote>
+<div><p>dept0.name,
+<a href="#id1"><span class="problematic" id="id2">*</span></a>[dept0.courses(lambda x: x.coursestart(i*100)).count()</p>
+<blockquote>
+<div>for i in range(1,5)]</div></blockquote>
+</div></blockquote>
+<p>)</p>
+</div></blockquote>
+</div></blockquote>
+</div></blockquote>
+<p>This is course what generated the original SQL.</p>
+</div>
 <div class="section" id="left-joining">
 <h1>Left Joining<a class="headerlink" href="#left-joining" title="Permalink to this headline">¶</a></h1>
 <p>This is a matter of using the <code class="docutils literal"><span class="pre">lj</span></code> method. Intuitively, this turns an empty list into a list containing a single null value, and keeps every other list the same.</p>
@@ -332,45 +372,41 @@
 <p>Here we go:</p>
 <div class="highlight-default"><div class="highlight"><pre><span></span><span class="nd">@do</span><span class="p">(</span><span class="n">Query</span><span class="p">)</span>
 <span class="k">def</span> <span class="nf">ex19</span><span class="p">():</span>
-    <span class="n">sc0</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">School</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">programs</span><span class="p">(</span><span class="k">lambda</span> <span class="n">y</span><span class="p">:</span> <span class="n">y</span><span class="o">.</span><span class="n">title</span> <span class="o">==</span> <span class="n">x</span><span class="o">.</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="mi">5</span><span class="p">)</span>
+    <span class="n">sc0</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">School</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">programs</span><span class="p">(</span><span class="k">lambda</span> <span class="n">y</span><span class="p">:</span> <span class="n">y</span><span class="o">.</span><span class="n">title</span> <span class="o">==</span> <span class="n">x</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+                                        <span class="o">.</span><span class="n">count</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="mi">5</span><span class="p">)</span>
     <span class="n">returnM</span> <span class="p">(</span>
              <span class="n">sc0</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-             <span class="n">sc0</span><span class="o">.</span><span class="n">departments</span><span class="p">()</span><span class="o">.</span><span class="n">fmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">courses</span><span class="p">(</span><span class="k">lambda</span> <span class="n">y</span><span class="p">:</span> <span class="n">y</span><span class="o">.</span><span class="n">credits</span> <span class="o">&gt;</span> <span class="mi">3</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">())</span><span class="o">.</span><span class="n">lj</span><span class="p">()</span><span class="o">.</span><span class="n">avg</span><span class="p">()</span>
+             <span class="n">sc0</span><span class="o">.</span><span class="n">departments</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">fmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">courses</span><span class="p">(</span><span class="k">lambda</span> <span class="n">y</span><span class="p">:</span> <span class="n">y</span><span class="o">.</span><span class="n">credits</span> <span class="o">&gt;</span> <span class="mi">3</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">())</span>
+                <span class="o">.</span><span class="n">lj</span><span class="p">()</span><span class="o">.</span><span class="n">avg</span><span class="p">()</span>
             <span class="p">)</span>
 </pre></div>
 </div>
 <p>Generated SQL:</p>
-<div class="highlight-mysql"><div class="highlight"><pre><span></span>SELECT
-  query_hw2g.reroute_hx8g AS name,
-  AVG(COALESCE(query_hw2g.count_no_hw5k, 0)) AS avg_count_no
-FROM (--━━━━━━━━━━ SUBQUERY ━━━━━━━━━━--
-        SELECT
-          query_gsd4.reroute_grz4 AS reroute_hvc0,
-          query_gsd4.reroute_hx8g AS reroute_hx8g,
-          COUNT(DISTINCT course_l_hvog.course_code) AS count_no_hw5k
-        FROM (--━━━━━━━━━━ SUBQUERY ━━━━━━━━━━--
-                SELECT
-                  sc_wuvk.school_code AS reroute_grz4,
-                  sc_wuvk.name AS reroute_hx8g
-                FROM school AS sc_wuvk
-                  JOIN program AS prog_5xfs ON (prog_5xfs.school_code = sc_wuvk.school_code)
-                    AND (prog_5xfs.title = sc_wuvk.name)
-                GROUP BY 1, 2
-                HAVING (COUNT(DISTINCT prog_5xfs.prog_code) &gt;= 5)
-                --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━--
-                ) AS query_gsd4
-          JOIN department AS dept_5xs8 ON (dept_5xs8.school_code = query_gsd4.reroute_grz4)
-          LEFT JOIN course AS course_l_hvog ON (course_l_hvog.dept_code = dept_5xs8.dept_code)
-            AND (course_l_hvog.credits &gt; 3)
-        GROUP BY 1, 2, dept_5xs8.dept_code
-        --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━--
-        ) AS query_hw2g
-  JOIN program AS prog_copy_q6g8 ON (prog_copy_q6g8.school_code = query_hw2g.reroute_hvc0)
-    AND (prog_copy_q6g8.title = query_hw2g.reroute_hx8g)
-GROUP BY 1
-HAVING (COUNT(DISTINCT prog_copy_q6g8.prog_code) &gt;= 5)
+<div class="highlight-mysql"><div class="highlight"><pre><span></span><span class="k">SELECT</span>
+  <span class="n">query_upi0</span><span class="p">.</span><span class="n">reroute_uqjc</span> <span class="k">AS</span> <span class="n">name</span><span class="p">,</span>
+  <span class="nf">AVG</span><span class="p">(</span><span class="nf">COALESCE</span><span class="p">(</span><span class="n">query_upi0</span><span class="p">.</span><span class="n">count_no_upl4</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span> <span class="k">AS</span> <span class="n">avg_count_no</span>
+<span class="k">FROM</span> <span class="p">(</span>
+        <span class="k">SELECT</span>
+          <span class="n">sc_j3io</span><span class="p">.</span><span class="n">school_code</span> <span class="k">AS</span> <span class="n">reroute_upew</span><span class="p">,</span>
+          <span class="n">sc_j3io</span><span class="p">.</span><span class="n">name</span> <span class="k">AS</span> <span class="n">reroute_uqjc</span><span class="p">,</span>
+          <span class="nf">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span> <span class="n">course_l_tti0</span><span class="p">.</span><span class="n">course_code</span><span class="p">)</span> <span class="k">AS</span> <span class="n">count_no_upl4</span>
+        <span class="k">FROM</span> <span class="n">school</span> <span class="k">AS</span> <span class="n">sc_j3io</span>
+          <span class="k">JOIN</span> <span class="n">department</span> <span class="k">AS</span> <span class="n">dept_j0k8</span> <span class="k">ON</span> <span class="p">(</span><span class="n">dept_j0k8</span><span class="p">.</span><span class="n">school_code</span> <span class="o">=</span> <span class="n">sc_j3io</span><span class="p">.</span><span class="n">school_code</span><span class="p">)</span>
+          <span class="k">JOIN</span> <span class="n">program</span> <span class="k">AS</span> <span class="n">prog_iy3k</span> <span class="k">ON</span> <span class="p">(</span><span class="n">prog_iy3k</span><span class="p">.</span><span class="n">school_code</span> <span class="o">=</span> <span class="n">sc_j3io</span><span class="p">.</span><span class="n">school_code</span><span class="p">)</span>
+            <span class="k">AND</span> <span class="p">(</span><span class="n">prog_iy3k</span><span class="p">.</span><span class="n">title</span> <span class="o">=</span> <span class="n">sc_j3io</span><span class="p">.</span><span class="n">name</span><span class="p">)</span>
+          <span class="k">LEFT</span> <span class="k">JOIN</span> <span class="n">course</span> <span class="k">AS</span> <span class="n">course_l_tti0</span> <span class="k">ON</span> <span class="p">(</span><span class="n">course_l_tti0</span><span class="p">.</span><span class="n">dept_code</span> <span class="o">=</span> <span class="n">dept_j0k8</span><span class="p">.</span><span class="n">dept_code</span><span class="p">)</span>
+            <span class="k">AND</span> <span class="p">(</span><span class="n">course_l_tti0</span><span class="p">.</span><span class="n">credits</span> <span class="o">&gt;</span> <span class="mi">3</span><span class="p">)</span>
+        <span class="k">GROUP</span> <span class="k">BY</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dept_j0k8</span><span class="p">.</span><span class="n">dept_code</span>
+        <span class="k">HAVING</span> <span class="p">(</span><span class="nf">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span> <span class="n">prog_iy3k</span><span class="p">.</span><span class="n">prog_code</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">5</span><span class="p">)</span>
+        <span class="p">)</span> <span class="k">AS</span> <span class="n">query_upi0</span>
+  <span class="k">JOIN</span> <span class="n">program</span> <span class="k">AS</span> <span class="n">prog_copy_iypc</span> <span class="k">ON</span> <span class="p">(</span><span class="n">prog_copy_iypc</span><span class="p">.</span><span class="n">school_code</span> <span class="o">=</span> <span class="n">query_upi0</span><span class="p">.</span><span class="n">reroute_upew</span><span class="p">)</span>
+    <span class="k">AND</span> <span class="p">(</span><span class="n">prog_copy_iypc</span><span class="p">.</span><span class="n">title</span> <span class="o">=</span> <span class="n">query_upi0</span><span class="p">.</span><span class="n">reroute_uqjc</span><span class="p">)</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="mi">1</span>
+<span class="k">HAVING</span> <span class="p">(</span><span class="nf">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span> <span class="n">prog_copy_iypc</span><span class="p">.</span><span class="n">prog_code</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">5</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>One of the things to iron out in future versions is the redundant condition <code class="docutils literal"><span class="pre">HAVING</span> <span class="pre">(COUNT(DISTINCT</span> <span class="pre">prog_copy_q6g8.prog_code)</span> <span class="pre">&gt;=</span> <span class="pre">5)</span></code>  appearing in both the innermost query and the outermost query.</p>
 </div>
 </div>
 
@@ -394,6 +430,7 @@ HAVING (COUNT(DISTINCT prog_copy_q6g8.prog_code) &gt;= 5)
 <li><a class="reference internal" href="#explicit-grouping-by">Explicit Grouping By</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#iteration">Iteration</a></li>
 <li><a class="reference internal" href="#left-joining">Left Joining</a><ul>
 <li><a class="reference internal" href="#left-joining-dependent-tables">Left Joining Dependent Tables</a></li>
 </ul>

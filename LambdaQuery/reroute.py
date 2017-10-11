@@ -422,7 +422,7 @@ def canMerge(self, subquery=False):
     else:
         subq = True
     
-    return canmerge and self.allExprs().filter(lambda x: isInvalid(x)).notExists() and subq
+    return canmerge and self.joincond.children.filter(lambda x: isInvalid(x)).notExists() and subq
 
 def mergeGrouped(self, debug=False, subquery=False):
     # merge tables that have the same groupbys, because only then does it make sense to merge them

@@ -124,8 +124,6 @@ def ex15():
                 .lj().count().coalesce_(0)
             )
 
-print(ex15().sql())
-
 @do(Query)
 def ex16():
     sc0 = yield School.query()
@@ -170,3 +168,5 @@ def ex19():
                 .fmap(lambda x: x.courses(lambda y: y.credits > 3).count())
                 .lj().avg()
             )
+
+print(ex17().sql())

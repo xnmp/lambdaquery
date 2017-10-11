@@ -270,6 +270,42 @@ Generated SQL:
     GROUP BY 1
 
 
+Iteration
+=========
+
+Suppose for each department, we wanted to know the number of 100 series courses it offered, and the same for 200 series, 300 series, and 400 series. In SQL, this looks like:
+
+.. code-block:: mysql
+
+    SELECT 
+      dept_ek40.name AS name, 
+      COUNT(DISTINCT CASE WHEN (course_fsu0.course_code > 100) AND (course_fsu0.course_code < 199) THEN course_fsu0.course_code END) AS count_no, 
+      COUNT(DISTINCT CASE WHEN (course_fsu0.course_code > 200) AND (course_fsu0.course_code < 299) THEN course_fsu0.course_code END) AS count_no0, 
+      COUNT(DISTINCT CASE WHEN (course_fsu0.course_code > 300) AND (course_fsu0.course_code < 399) THEN course_fsu0.course_code END) AS count_no1, 
+      COUNT(DISTINCT CASE WHEN (course_fsu0.course_code > 400) AND (course_fsu0.course_code < 499) THEN course_fsu0.course_code END) AS count_no2
+    FROM department AS dept_ek40
+      JOIN course AS course_fsu0 ON (course_fsu0.dept_code = dept_ek40.dept_code)
+    GROUP BY 1
+
+To write this out, one would usually copy and paste the column and replace the number every time. We can do better. To illustrate, let's first define a property for if the code is of a particular series number::
+
+    @Lifted
+    def coursestart(course, start):
+        return (course.no > start) & (course.no < start + 99)
+
+Note that this function can take a second argument: ``start``. Now let's use it like so:
+
+    @do(Query)
+    def ex17():
+        dept0 = yield Department.query()
+        returnM (
+                 dept0.name,
+                 *[dept0.courses(lambda x: x.coursestart(i*100)).count() 
+                    for i in range(1,5)]
+                )
+
+This is course what generated the original SQL.
+
 
 Left Joining
 =============
@@ -359,33 +395,25 @@ Generated SQL:
 .. code-block:: mysql
 
     SELECT 
-      query_hw2g.reroute_hx8g AS name, 
-      AVG(COALESCE(query_hw2g.count_no_hw5k, 0)) AS avg_count_no
-    FROM (--━━━━━━━━━━ SUBQUERY ━━━━━━━━━━--
+      query_upi0.reroute_uqjc AS name, 
+      AVG(COALESCE(query_upi0.count_no_upl4, 0)) AS avg_count_no
+    FROM (
             SELECT 
-              query_gsd4.reroute_grz4 AS reroute_hvc0, 
-              query_gsd4.reroute_hx8g AS reroute_hx8g, 
-              COUNT(DISTINCT course_l_hvog.course_code) AS count_no_hw5k
-            FROM (--━━━━━━━━━━ SUBQUERY ━━━━━━━━━━--
-                    SELECT 
-                      sc_wuvk.school_code AS reroute_grz4, 
-                      sc_wuvk.name AS reroute_hx8g
-                    FROM school AS sc_wuvk
-                      JOIN program AS prog_5xfs ON (prog_5xfs.school_code = sc_wuvk.school_code) 
-                        AND (prog_5xfs.title = sc_wuvk.name)
-                    GROUP BY 1, 2
-                    HAVING (COUNT(DISTINCT prog_5xfs.prog_code) >= 5)
-                    --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━--
-                    ) AS query_gsd4
-              JOIN department AS dept_5xs8 ON (dept_5xs8.school_code = query_gsd4.reroute_grz4)
-              LEFT JOIN course AS course_l_hvog ON (course_l_hvog.dept_code = dept_5xs8.dept_code) 
-                AND (course_l_hvog.credits > 3)
-            GROUP BY 1, 2, dept_5xs8.dept_code
-            --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━--
-            ) AS query_hw2g
-      JOIN program AS prog_copy_q6g8 ON (prog_copy_q6g8.school_code = query_hw2g.reroute_hvc0) 
-        AND (prog_copy_q6g8.title = query_hw2g.reroute_hx8g)
+              sc_j3io.school_code AS reroute_upew, 
+              sc_j3io.name AS reroute_uqjc, 
+              COUNT(DISTINCT course_l_tti0.course_code) AS count_no_upl4
+            FROM school AS sc_j3io
+              JOIN department AS dept_j0k8 ON (dept_j0k8.school_code = sc_j3io.school_code)
+              JOIN program AS prog_iy3k ON (prog_iy3k.school_code = sc_j3io.school_code) 
+                AND (prog_iy3k.title = sc_j3io.name)
+              LEFT JOIN course AS course_l_tti0 ON (course_l_tti0.dept_code = dept_j0k8.dept_code) 
+                AND (course_l_tti0.credits > 3)
+            GROUP BY 1, 2, dept_j0k8.dept_code
+            HAVING (COUNT(DISTINCT prog_iy3k.prog_code) >= 5)
+            ) AS query_upi0
+      JOIN program AS prog_copy_iypc ON (prog_copy_iypc.school_code = query_upi0.reroute_upew) 
+        AND (prog_copy_iypc.title = query_upi0.reroute_uqjc)
     GROUP BY 1
-    HAVING (COUNT(DISTINCT prog_copy_q6g8.prog_code) >= 5)
+    HAVING (COUNT(DISTINCT prog_copy_iypc.prog_code) >= 5)
 
 One of the things to iron out in future versions is the redundant condition ``HAVING (COUNT(DISTINCT prog_copy_q6g8.prog_code) >= 5)``  appearing in both the innermost query and the outermost query. 

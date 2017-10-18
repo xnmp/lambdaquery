@@ -290,8 +290,11 @@ def if_(cond, expr1, expr2):
     return f"CASE WHEN {cond} THEN {expr1} ELSE {expr2} END"
 @sqlfunc
 def ifen_(expr, cond):
-    # if type(expr) is FuncExpr and expr.func.__name__ == "ifen_":
-    #     cond = cond & expr.children[0]._notnull_() & expr.children[1]._notnull_()
+    if type(cond) is FuncExpr and cond.func.__name__ == "ifen_":
+        cond = cond.children[1] & cond.children[0]
+    if type(expr) is FuncExpr and expr.func.__name__ == "ifen_":
+        cond &= expr.children[1]
+        expr = expr.children[0]
     return f"CASE WHEN {cond} THEN {expr} END"
 @sqlfunc
 def case_(*pairs):
@@ -358,11 +361,6 @@ def row_(partitionexpr, orderexpr):
 
 
 
-@sqlfunc
-def zscore_(expr, partitionexpr):    
-    return f"({expr} - AVG({expr}) OVER (PARTITION BY {partitionexpr})) :: FLOAT / STDDEV({expr}) OVER (PARTITION BY {partitionexpr})"
-
-
 
 
 # %% ^━━━━━━━━━━━━━━━━━━ AGGREGATES ━━━━━━━━━━━━━━━━━━━━^
@@ -426,6 +424,10 @@ def first_(expr, *partitions, order):
 def last_(expr, *partitions, order):
     parts = ','.join(map(str, partitions))
     return f'''LAST_VALUE ({expr}) OVER (PARTITION BY {parts} ORDER BY {orderby} ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)'''
+# @windowfunc
+# def zscore_(expr, partitionexpr):    
+#     return f"({expr} - AVG({expr}) OVER (PARTITION BY {partitionexpr})) :: FLOAT / STDDEV({expr}) OVER (PARTITION BY {partitionexpr})"
+
 
 
 

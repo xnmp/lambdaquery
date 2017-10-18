@@ -41,10 +41,10 @@ class Table(object):
     
     def isEq(self, other):
         if self.isTable() and other.isTable():
-            return self.tablename == other.tablename and self.leftjoin == other.leftjoin
+            return self.tablename == other.tablename #and (not self.leftjoin or self.leftjoin == other.leftjoin)
         if not self.isTable() and not other.isTable():
             return self.columns == other.columns and self.joincond == other.joincond \
-                and self.groupbys == other.groupbys and self.leftjoin == other.leftjoin
+                and self.groupbys == other.groupbys #and (not self.leftjoin or self.leftjoin == other.leftjoin)
         return False
     
     @property
@@ -247,7 +247,8 @@ class Expr(object):
             and self.children[0].getTables() and self.children[1].getTables()
     
     def isBool(self):
-        return isinstance(self, BinOpExpr) and self.func.__name__ in ['=','<','>','<=','>=']
+        return (isinstance(self, BinOpExpr) and self.func.__name__ in ['=','<','>','<=','>=']) \
+             or (isinstance(self, FuncExpr) and self.func.__name__ in ['__invert__', 'notnull_', 'isnull_'])
     
     def getEqs(self, jc):
         res = L()
@@ -665,7 +666,7 @@ class Columns(dict):
     
     def items(self):
         return L(*dict.items(self))
-        
+    
     def getKey(self, value):
         for key, expr in self.items():
             if expr == value:

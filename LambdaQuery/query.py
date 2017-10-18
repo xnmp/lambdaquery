@@ -272,7 +272,7 @@ class Query(Table, Monad):
         
         alias = self.columns.__class__.__name__.lower()
         
-        # # as a subquery (shouldn't be able to move into the subquery here)
+        # # # as a subquery (shouldn't be able to move into the subquery here)
         # res = self.lj().fmap(lambda x: x.firstCol())
         # res.alias = alias
         # res.ungroupby()
@@ -280,14 +280,14 @@ class Query(Table, Monad):
         # res = Columns({'exists_' + alias: expr})
         # return res
         
-        # as an exists expr
+        # # as an exists expr
         # return ExistsExpr(self).asCols()
         
         # as a straight up (screws up one-to-one ness)
         res = self.lj().asCols().firstCol().__getattr__(_func)().one.label('exists_' + alias).setExists()
         return res
         
-        # as a bool any
+        # # as a bool any
         # return self.lj().fmap(lambda x: x.firstCol()).any()
     
     def notExists(self):
@@ -507,7 +507,11 @@ def identifyTable(cond0, cond1, tab0, tab1, res, other):
     for expr0 in andcond.baseExprs().filter(lambda x: (x.table == tab0)):# & x.isPrimary()):
         for expr1 in andcond.baseExprs().filter(lambda x: (x.table == tab1)):# & x.isPrimary()):
             if expr0.fieldname == expr1.fieldname:
-                if expr0.getEqs(andcond) ^ expr1.getEqs(andcond):                    
+                if expr0.getEqs(andcond) ^ expr1.getEqs(andcond):
+                    if leftover0 and tab1.leftjoin and not tab0.leftjoin:
+                        return False
+                    if leftover1 and tab0.leftjoin and not tab1.leftjoin:
+                        return False
                     return leftover0.getTables() <= L(tab0) and leftover1.getTables() <= L(tab0) + other.getTables()
     return False
 
@@ -519,6 +523,9 @@ def moveJoins(cond0, cond1, tab0, tab1, res, other):
     
     jtables = res.joincond.getTables() & other.joincond.getTables()
     
+    if not tab1.leftjoin: tab0.leftjoin = False
+    if not tab0.leftjoin: tab1.leftjoin = False
+    
     other.setSource(tab0, tab1)
     # cond1.setSource(tab0, tab1)
     # res.setSource(tab0, tab1)
@@ -529,8 +536,8 @@ def moveJoins(cond0, cond1, tab0, tab1, res, other):
     leftover1.children = leftover1.children.filter(lambda x: not x.isJoin())
     
     @baseFunc
-    def addJoins(expr, cond):
-         return Expr._ifen_(expr, cond) #if expr.table == tab0 else expr
+    def addJoins(expr, cond):    
+        return Expr._ifen_(expr, cond) if (L(tab0) + tab0.derivatives) ^ expr.getTables() else expr
     
     if leftover0.children:
         res.modify(lambda x: addJoins(x, leftover0), 'columns')
@@ -539,6 +546,5 @@ def moveJoins(cond0, cond1, tab0, tab1, res, other):
     if leftover1.children:# <= 1:
         other.modify(lambda x: addJoins(x, leftover1), 'columns')
         other.joincond >>= lens.children.modify(lambda x: x - leftover1.children)
-    
-    
+
 # only move if cond0 and cond1 are actual filter conds, not joinconds

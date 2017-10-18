@@ -145,8 +145,8 @@ def moveInHaving(inner, outer, debug=False):
     # move in the HAVING conditions, this facilitates a cleanup later on
     # move it in if the inner query is the only one of its tables.
     
-    for outexpr in outer.joincond.children.filter(lambda x: x.getTables().len() == 1 
-                                               and x.getTables()[0] == inner and not x.isagg()
+    for outexpr in outer.joincond.children.filter(lambda x: x.getTables() <= (inner.getTables() + L(inner))
+                                               and not x.isagg() # and x.getTables()[0] == inner 
                                                and x.getRef(oldtables=L(inner)).isagg()
                                                ):
         
@@ -162,9 +162,10 @@ def moveInHaving(inner, outer, debug=False):
         outer.joincond.children -= outexpr
         
         # get rid of references that were only there to provide for the aggregate joincond (broken)
+        # if delete:
         for key, inexpr in inner.columns.items():
             # if the expr doesn't get refered to by the outer table
-            if not outer.allExprs().bind(lambda x: L(x) + x.descendants()).filter(lambda x: x.getRef() == inexpr).exists():
+            if inexpr in havingexpr.descendants() and not outer.allDescendants().filter(lambda x: x.getRef() == inexpr).exists():
                 del inner.columns[key]
 
 
@@ -427,6 +428,21 @@ def canMerge(self, subquery=False):
     return canmerge and self.joincond.children.filter(lambda x: isInvalid(x, isjc=True)).notExists() \
         and subq and (self.columns.values() + self.groupbys).filter(lambda x: isInvalid(x, isjc=False)).notExists()
 
+def isSum(q0):
+    return q0.allDescendants().filter(lambda y: type(y) is AggExpr and y.func.__name__ == 'sum_').exists()
+
+def canMergeTable(tab0, tab1, subquery=False):
+    hi = (tab0.groupbys <= tab1.groupbys and tab0 in tab1.getTables() and not isSum(tab0) and not isSum(tab1)) or \
+              (tab1.groupbys <= tab0.groupbys and tab1 in tab0.getTables() and not isSum(tab0) and not isSum(tab1)) or \
+              ((isSum(tab0) or isSum(tab1)) and tab0.joincond == tab1.joincond and tab0.groupbys == tab1.groupbys) or \
+              (tab0.groupbys == tab1.groupbys and not isSum(tab0) and not isSum(tab1))
+              # or ((isSum(tab0) or isSum(tab1)) and (not tab0.isagg() or not tab1.isagg()) and tab0.groupbys == tab1.groupbys)
+    # hi &= (subquery or tab0.columns.values().filter(lambda x: not x.isagg() and not x.isPrimary()).notExists())
+    return hi and not tab1.joincond.children.filter(lambda x: isInvalid(x, isjc=True)) \
+              and not tab0.joincond.children.filter(lambda x: isInvalid(x, isjc=True)) \
+              and tab1.limitvar == tab0.limitvar and tab1.ordervar == tab0.ordervar
+
+
 def mergeGrouped(self, debug=False, subquery=False):
     # merge tables that have the same groupbys, because only then does it make sense to merge them
     
@@ -436,14 +452,20 @@ def mergeGrouped(self, debug=False, subquery=False):
     
     if canMerge(self, subquery=subquery):
         alltablegroups = L(L(self) + checktables.filter(lambda x: x.groupbys.exists() #and not hasExists(x, self)
-                                                          and x.groupbys #.fmap(lambda x: x.getRef()) 
-                                                            <= self.groupbys)).filter(lambda x: len(x) > 1)
+                                                          and x.groupbys <= self.groupbys #.fmap(lambda x: x.getRef())
+                                                          and not x.allDescendants().filter(lambda y: type(y) is AggExpr and y.func.__name__ == 'sum_')
+                                                          and not x.limitvar
+                                                            )).filter(lambda x: len(x) > 1)
     
     if not alltablegroups:
-        alltablegroups = checktables.filter(lambda x: x.isQuery())\
+        alltablegroups = checktables.filter(lambda x: x.isQuery()
+                                            and not x.allDescendants().filter(lambda y: type(y) is AggExpr and y.func.__name__ == 'sum_')
+                                            )\
                            .groupby(lambda x: (x.groupbys, x.leftjoin))\
                            .filter(lambda x: len(x.value) > 1)\
                            .fmap(lambda x: x.value)
+    
+    alltablegroups = (L(self) + self.subQueries()).partition(lambda x, y: canMergeTable(x, y, subquery=subquery)).filter(lambda x: len(x) > 1)
     
     for tablegroup in alltablegroups:
         
@@ -451,6 +473,7 @@ def mergeGrouped(self, debug=False, subquery=False):
         self.setSource(merged, oldtable=tablegroup)
         
         if self in tablegroup:
+            moveInHaving(inner=merged, outer=self)
             
             # merge with a subquery and convert the agg exprs
             merged.modify(lambda x: mergeExpr(x, oldtables=tablegroup))
@@ -461,7 +484,7 @@ def mergeGrouped(self, debug=False, subquery=False):
     
     if alltablegroups:
         mergeGrouped(self)
-        
+    
     # for subtable in self.subQueries():
     #     mergeGrouped(subtable)
 
@@ -502,19 +525,29 @@ def copyTable(table, parent, addcond=True, debug=False):
         #     parent.joincond &= AndExpr(eq_gpexprs)
         
 
-def connectTables(table, debug=False):
-    for i, parent in table.parents.enumerate():
-        if i == 0: continue
-        if debug: print(f'CONNECTED(): {table}')
-        tablecopy = copy(table)
-        parent.setSource(tablecopy, table)
-        for gparent in parent.parents:
-            # add a joincond
-            gparent.joincond.children += EqExpr(table.primaryExpr(), tablecopy.primaryExpr())
-            # now reroute it
-            gparent.joincond.modify(lambda x: reroute(x, basetable=table, target=table.parents[i-1]))
-            gparent.joincond.modify(lambda x: reroute(x, basetable=tablecopy, target=parent))
-        table = tablecopy
+def connectTables(queries, parent, debug=False):
+    
+    commongps = queries.fmap(lambda x: x.groupbys).fold(lambda x, y: x ^ y)#.fmap(lambda x: x.getRefBase()))
+    
+    for i, q in enumerate(queries[1:]):
+        for expr in commongps:
+            q.columns.getKey(commongps)
+            expr0 = reroute(expr, basetable=expr.getTables()[0], target=queries[i])
+            expr1 = reroute(expr, basetable=expr.getTables()[0], target=q)            
+            parent.joincond.children += EqExpr(expr0, expr1)
+    
+    # for i, parent in table.parents.enumerate():
+    #     if i == 0: continue
+    #     if debug: print(f'CONNECTED(): {table}')
+    #     tablecopy = copy(table)
+    #     parent.setSource(tablecopy, table)
+    #     for gparent in parent.parents:
+    #         # add a joincond
+    #         gparent.joincond.children += EqExpr(table.primaryExpr(), tablecopy.primaryExpr())
+    #         # now reroute it
+    #         gparent.joincond.modify(lambda x: reroute(x, basetable=table, target=table.parents[i-1]))
+    #         gparent.joincond.modify(lambda x: reroute(x, basetable=tablecopy, target=parent))
+    #     table = tablecopy
 
 def copyJoinconds(basetable, source, target):
     res = AndExpr(source.joincond.children.filter(lambda x: x.isJoin() and basetable in x.getTables()))
@@ -538,13 +571,18 @@ def reduceQuery(self, debug=False, subquery=False):
         print(self.sql(reduce=False, debug=True))        
     
     # if the selects are left joined, then make the query left joined
-    # if self.isQuery() and self.getTables().fmap(lambda x: x.leftjoin).all():
-    #     self.leftjoin = True
-    #     for table in self.getTables():
-    #         table.leftjoin = False
+    if self.isQuery() and self.getTables().fmap(lambda x: x.leftjoin).all():
+        self.leftjoin = True
+        for table in self.getTables():
+            table.leftjoin = False
     
     # STEP 1: MERGE SUBQUERIES WITH THE SAME GROUP BYS
     selfcopy = copy(self)
+    
+    if self.isagg() and not subquery:
+        newgroupbys = self.columns.values().filter(lambda x: not x.isagg() and not x.isPrimary())
+        self.groupbys = newgroupbys
+        
     mergeGrouped(self, subquery=subquery)
     if debug:
         if str(selfcopy.__dict__) != str(self.__dict__):
@@ -562,7 +600,9 @@ def reduceQuery(self, debug=False, subquery=False):
     
     
     # STEP 2: MOVING IN
-    for newtable in self.subQueries():
+    addParents(self)
+    # hi = self.subQueries().filter(lambda x: not (ancestors(x) ^ self.subQueries()))    
+    for newtable in self.subQueries().filter(lambda x: not (ancestors(x) ^ self.subQueries())):
         moveInAll(inner=newtable, outer=self, debug=debug)
     
     
@@ -583,27 +623,37 @@ def reduceQuery(self, debug=False, subquery=False):
     
     
     # STEP 5: ACTUALLY REROUTE
-    for table in getRerouteTables(self):
-        if debug:
-            print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
-            print("REROUTE", table)
-        for newtable in table.parents - self:
-            rerouteAll(table, inner=newtable, outer=self)
-        if debug:
-            print(self.sql(reduce=False, debug=True))
-            print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
+    while getRerouteTables(self):
+        for table in getRerouteTables(self):
+            if debug:
+                print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
+                print("REROUTE", table)
+            newtables = table.parents - self
+            for newtable in newtables.filter(lambda x: not (ancestors(x) ^ newtables)):
+                rerouteAll(table, inner=newtable, outer=self)
+            if debug:
+                print(self.sql(reduce=False, debug=True))
+                print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
     
     
-    # # STEP 6: MOVE IN THE "HAVING" EXPRS
-    # for newtable in self.subQueries():
-    #     moveInHaving(inner=newtable, outer=self)
+    # warning: move in a having before you connect it will cause it to disappear sometimnes
+    
     
     
     # STEP 7: CONNECT THE DISJOINTED TABLES
     addParents(self, reset=True, debug=True)
-    tabdescendants = self.getTables().getTables().filter(lambda x: (x.parents ^ self.getTables()).len() > 1)
-    for table in tabdescendants:
-        connectTables(table, debug=debug)
+    # connect subqueries with at least one groupby in common
+    tabdescendants = self.subQueries().partition(lambda x, y: x.groupbys ^ y.groupbys).filter(lambda x: len(x) > 1)
+    for queries in tabdescendants:
+        connectTables(queries, self, debug=debug)
+        if debug:
+            print("CONNECTED():", queries.fmap(lambda x: x.groupbys).fold(lambda x, y: x ^ y))
+            print(self.sql(reduce=False, debug=True))
+            print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
+    
+    # # STEP 6: MOVE IN THE "HAVING" EXPRS
+    # for newtable in self.subQueries():
+    #     moveInHaving(inner=newtable, outer=self)
     
     
     # STEP 8: REDUCE CHILDREN

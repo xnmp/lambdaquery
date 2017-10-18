@@ -183,6 +183,20 @@ class L(list):
                 res[dummylabel] = L(el)
         return L(*[KV(key, value) for key, value in res.items()])
     
+    def partition(self, eqrel):
+        # by an equivalence relation
+        res = L()
+        
+        for el in self:
+            for i, part in enumerate(res):
+                if part.filter(lambda y: eqrel(el, y)):
+                    part += el
+                    res[i] = part
+                    break
+            else:
+                res += L(L(el))        
+        return res
+    
     def exists(self):
         return bool(self)
     

@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='lambdaquery',
-    version='0.1.5',
+    version='0.1.6',
     description='Composable SQL in Pure Python',
     author='Chong Wang',
     author_email='chonw89@gmail.com',

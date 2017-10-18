@@ -77,14 +77,14 @@ def lastSeparator(self):
 
 def getGroupbys(self, havings=None, reduce=False, subquery=False, debug=False):
     exprs = self.columns.values()
-    if (reduce or subquery) and self.isagg() and not exprs.fmap(lambda x: x.isagg()).all() and False:
+    if (reduce or subquery) and self.isagg() and not exprs.fmap(lambda x: x.isagg()).all():
         groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg() and not isinstance(x, WindowExpr)).len() + 1))
         groupbys += havings.bind(Expr.havingGroups).filter(lambda x: x not in exprs)
         if subquery and not debug:
             # don't include the groupbys if the outermost query is an aggregate, 
             # because we're cheating with functions like count_
             groupbys += self.groupbys.filter(lambda x: x not in exprs)
-    elif self.isagg() or debug or True:
+    elif self.isagg() or debug:
         groupbys = self.groupbys
     else:
         return L()

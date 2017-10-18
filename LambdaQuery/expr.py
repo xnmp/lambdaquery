@@ -87,6 +87,16 @@ class Table(object):
                                                     or (x.children[1].isPrimary() and x.children[1].table == self))
                                                ).getTables() - self
 
+class FixedTabe(Table):
+    def __init__(alias, *args, tableclass=None, rawsql=None, func=None):
+        if rawsql:
+            self.tablename = rawsql
+        else:
+            self.tablename = func(*args)
+        self.alias = alias
+        self.tableclass = tableclass
+
+
 def baseFunc(exprfunc):
     # turns a function on a BaseExpr into a function on all Exprs
     def modfunc(expr, *args, **kwargs):
@@ -223,6 +233,9 @@ class Expr(object):
     def isagg(self):
         return self.children.filter(lambda x: x.isagg()).any()
     
+    def iswindow(self):
+        return self.children.filter(lambda x: x.iswindow()).any()
+    
     def isTime(self):
         return (type(self) is BaseExpr and ('time' in self.fieldname or 'date' in self.fieldname)) \
             or (type(self) is BaseExpr and type(self.table) is not Table and self.getRef().isTime()) \
@@ -232,6 +245,9 @@ class Expr(object):
         return isinstance(self, BinOpExpr) and self.func.__name__ in ['=','<','>','<=','>='] \
             and self.children[0].getTables() != self.children[1].getTables() \
             and self.children[0].getTables() and self.children[1].getTables()
+    
+    def isBool(self):
+        return isinstance(self, BinOpExpr) and self.func.__name__ in ['=','<','>','<=','>=']
     
     def getEqs(self, jc):
         res = L()
@@ -294,9 +310,10 @@ class BaseExpr(Expr):
         return L(self.table)
     def isagg(self):
         return False
+    def iswindow(self):
+        return False
     def asCols(self):
         return Columns({self.fieldname: self})
-    
 
 
 class AndExpr(Expr):
@@ -370,6 +387,11 @@ class FuncExpr(Expr):
 
 class AggExpr(FuncExpr):
     def isagg(self):
+        return True
+
+
+class WindowExpr(FuncExpr):
+    def iswindow(self):
         return True
 
 

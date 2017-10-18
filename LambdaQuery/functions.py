@@ -136,8 +136,16 @@ def aggfunc(strfunc):
 
 
 def windowfunc(strfunc):
-    # not implemented
-    return strfunc
+    @lift
+    @wraps(strfunc)
+    def exprfunc(*exprs, **kwargs):
+        return WindowExpr(strfunc, *exprs, **kwargs)
+    @wraps(strfunc)
+    def qfunc(q0, *args, **kwargs):
+        args = L(*args).fmap(lambda x: getattr(q0.columns, x) if type(x) is str else x)
+        return q0.aggregate(lambda x: exprfunc(*args, **kwargs))
+    setattr(Query, strfunc.__name__[:-1], qfunc)
+    return exprfunc
 
 
 # this dooesn't work...
@@ -173,7 +181,7 @@ class Lifted(object):
 
 
 class Kleisli(object):
-    def __init__(self, func):        
+    def __init__(self, func):
         self.func = augment(func)
         setattr(Columns, func.__name__, self.func)
         setattr(Query, func.__name__, lambda x: x.bind(self.func))

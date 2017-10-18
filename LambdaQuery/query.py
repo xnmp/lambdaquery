@@ -209,7 +209,7 @@ class Query(Table, Monad):
             # SUPER IMPORTANT POINT: REMOVE A GROUP BY HERE
             newsource.ungroupby()
         
-        if len(res) == 1 and not newsource.groupbys:
+        if len(res) == 1 and not newsource.groupbys and not res.values().filter(lambda x: type(x.getRef()) is WindowExpr):
             newsource = deepcopy(newsource)
             res = Columns({res.keys()[0]: SubQueryExpr(newsource)})
         
@@ -218,6 +218,9 @@ class Query(Table, Monad):
     
     def agg(self, *args, **kwargs):
         return self.aggregate(*args, **kwargs)
+    
+    def apply(self, *args, **kwargs):
+        return self.aggregate(*args, **kwargs).asQuery()
     
     def distinct(self, *args):
         res = self.columns.deepcopy()
@@ -230,7 +233,7 @@ class Query(Table, Monad):
             res.groupbys = res.values()
         else:
             for key, expr in res.items():
-                res[key] = BaseExpr(expr.fieldname, source.columns.getTables()[0]) #, source)
+                res[key] = BaseExpr(expr.fieldname, source.columns.getTables()[0])#, source)
             # source.columns = BaseExpr('*', source.columns.getTables()[0]).asCols()
             source.columns = source.columns.getTables()[0].primaryExpr().asCols()
             res.groupbys = source.groupbys.fmap(lambda x: x.setSource(source, x.getTables()))

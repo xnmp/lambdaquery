@@ -115,6 +115,9 @@ class L(list):
     def filter(self, cond):
         return L(*[el for el in self if cond(el)])
     
+    def zip(self, other):
+        return L(*zip(self, other))
+    
     def fmap(self, ffunc):
         return L(*[ffunc(el) for el in self])
     
@@ -147,8 +150,8 @@ class L(list):
         return len(self)
         
     def fold(self, ffunc=None, mzero=None, meth=None):
-        if not self:
-            print("Empty Fold")
+        # if not self:
+        #     print("Empty Fold")
         res = mzero if mzero is not None else self[0]
         ffunc = ffunc if ffunc is not None else getattr(mzero.__class__, meth)
         for el in self:

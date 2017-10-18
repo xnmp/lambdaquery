@@ -253,7 +253,7 @@ def canReroute(expr, basetable, target, outer=None):
     
     return basetable in expr.getTables() and expr.getTables() <= target.getTables() \
            and type(expr) is not ConstExpr and (not expr.isagg()) \
-           and not isexists #and type(expr) is BaseExpr
+           and not isexists and not expr.isBool() #and type(expr) is BaseExpr
 
 
 def reroute(expr, basetable, target, outer=None):
@@ -310,7 +310,8 @@ def isGrouped(expr, target):
     # if expr is grouped by, or is joined to anything of the primary keys, 
     # everything equal to a groupby expr
     allgroups = getGroups(target)
-    return expr in allgroups or expr.getTables() <= allgroups.filter(lambda x: x.isPrimary()).getTables()
+    return expr in allgroups or expr.getTables() <= allgroups.filter(lambda x: x.isPrimary()).getTables() \
+        or (not expr.isagg() and expr.getRef().isagg())
 
 
 def getAllEqsRecursive(expr, jclist):
@@ -439,7 +440,7 @@ def mergeGrouped(self, debug=False, subquery=False):
                                                             <= self.groupbys)).filter(lambda x: len(x) > 1)
     
     if not alltablegroups:
-        alltablegroups = checktables.filter(lambda x: x.groupbys.exists())\
+        alltablegroups = checktables.filter(lambda x: x.isQuery())\
                            .groupby(lambda x: (x.groupbys, x.leftjoin))\
                            .filter(lambda x: len(x.value) > 1)\
                            .fmap(lambda x: x.value)
@@ -488,13 +489,18 @@ def cleanUp(self):
 def copyTable(table, parent, addcond=True, debug=False):
     # when a table can't be rerouted
     # also needed to clone join conditions into subqueries
-    tablecopy = copy(table)
+    tablecopy = deepcopy(table)
     tablecopy.alias += '_copy'
     parent.setSource(tablecopy, oldtable=table)
     if addcond:
         # add condition to the parent that the two tables are the same
         eqexprs = tablecopy.primarynames().fmap(lambda x: EqExpr(BaseExpr(x, table), BaseExpr(x, tablecopy)))
         parent.joincond &= AndExpr(eqexprs)
+        
+        # if type(tablecopy) is Query:
+        #     eq_gpexprs = tablecopy.groupbys.zip(table.groupbys).fmap(lambda x: EqExpr(x[0], x[1]))
+        #     parent.joincond &= AndExpr(eq_gpexprs)
+        
 
 def connectTables(table, debug=False):
     for i, parent in table.parents.enumerate():
@@ -588,9 +594,9 @@ def reduceQuery(self, debug=False, subquery=False):
             print(' # %% ^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━^ ')
     
     
-    # STEP 6: MOVE IN THE "HAVING" EXPRS
-    for newtable in self.subQueries():
-        moveInHaving(inner=newtable, outer=self)
+    # # STEP 6: MOVE IN THE "HAVING" EXPRS
+    # for newtable in self.subQueries():
+    #     moveInHaving(inner=newtable, outer=self)
     
     
     # STEP 7: CONNECT THE DISJOINTED TABLES
@@ -605,6 +611,10 @@ def reduceQuery(self, debug=False, subquery=False):
         if debug:
             print(' # %% ^━━━━━━━━━━━━━━━ REDUCING CHILD ━━━━━━━━━━━━━━━━━━━━^ ')
         reduceQuery(subtable, debug=debug, subquery=True)
+    
+    # STEP 6: MOVE IN THE "HAVING" EXPRS
+    for newtable in self.subQueries():
+        moveInHaving(inner=newtable, outer=self)
     
     
     # STEP 9: CLEAN UP REDUNDANT OUTERMOST QUERY

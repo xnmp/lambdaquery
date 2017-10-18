@@ -78,7 +78,7 @@ def lastSeparator(self):
 def getGroupbys(self, havings=None, reduce=False, subquery=False, debug=False):
     exprs = self.columns.values()
     if (reduce or subquery) and self.isagg() and not exprs.fmap(lambda x: x.isagg()).all():
-        groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg()).len() + 1))
+        groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg() and not isinstance(x, WindowExpr)).len() + 1))
         groupbys += havings.bind(Expr.havingGroups).filter(lambda x: x not in exprs)
         if subquery and not debug:
             # don't include the groupbys if the outermost query is an aggregate, 
@@ -88,6 +88,8 @@ def getGroupbys(self, havings=None, reduce=False, subquery=False, debug=False):
         groupbys = self.groupbys
     else:
         return L()
+    if groupbys and self.isagg():
+        groupbys += self.columns.values().filter(lambda x: isinstance(x, WindowExpr)).bind(lambda x: x.children).filter(lambda x: x not in exprs)
     return groupbys
 
 
@@ -100,7 +102,7 @@ def sql(self, display=True, reduce=True, subquery=False, debug=False, correlated
         raise EnvironmentError("INFINITE LOOP")
     
     # ==SELECT...
-    selects = self.columns.items().sort(lambda x: x[1].isagg())
+    selects = self.columns.items().sort(lambda x: x[1].isagg() or isinstance(x[1], WindowExpr))
     showSql = lambda p: str(p[1]) + (f' AS {p[0]}' if p[0] != '' else f'')
     select_type = '' if self.isagg() else 'DISTINCT '
     res = f'SELECT {select_type}\n  ' + selects.fmap(showSql).intersperse(', \n  ')

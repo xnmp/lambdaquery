@@ -268,27 +268,28 @@ class Query(Table, Monad):
         # return lens.columns.modify(lambda x: ffunc(x, *args, **kwargs))(self).joinM()
     
     
-    def exists(self, col=False, _func='notnull_'):
+    def exists(self, col=False, _func='notnull_', out='col'):
         
         alias = self.columns.__class__.__name__.lower()
         
-        # # # as a subquery (shouldn't be able to move into the subquery here)
-        # res = self.lj().fmap(lambda x: x.firstCol())
-        # res.alias = alias
-        # res.ungroupby()
-        # expr = Expr._notnull_(BaseExpr(res.columns.keys()[0], res))
-        # res = Columns({'exists_' + alias: expr})
-        # return res
-        
-        # # as an exists expr
-        # return ExistsExpr(self).asCols()
-        
-        # as a straight up (screws up one-to-one ness)
-        res = self.lj().asCols().firstCol().__getattr__(_func)().one.label('exists_' + alias).setExists()
-        return res
-        
-        # # as a bool any
-        # return self.lj().fmap(lambda x: x.firstCol()).any()
+        if out == 'col':
+            # as a straight up (screws up one-to-one ness)
+            return self.lj().asCols().firstCol().__getattr__(_func)().one.label('exists_' + alias).setExists()
+        elif out == 'any':
+            # as a bool any
+            return self.lj().fmap(lambda x: x.firstCol()).any()
+        elif out == 'exists':
+            # as an exists expr
+            return ExistsExpr(self).asCols()
+        elif out == 'subquery':
+            # # as a subquery (shouldn't be able to move into the subquery here)
+            res = self.lj().fmap(lambda x: x.firstCol())
+            res.alias = alias
+            res.ungroupby()
+            expr = Expr._notnull_(BaseExpr(res.columns.keys()[0], res))
+            res = Columns({'exists_' + alias: expr})
+            return res
+    
     
     def notExists(self):
         return self.exists(_func='isnull_')
@@ -477,8 +478,8 @@ def addQuery(self, other, addcols='both', debug=False):
                 jtables += L(tab0)
                 break
         if not skiptable:
-            jtables += L(tab1)
             res.joincond &= cond1
+            jtables += L(tab1)
     
     # short circuit it
     # res.joincond &= other.joincond
@@ -503,6 +504,7 @@ def identifyTable(cond0, cond1, tab0, tab1, res, other):
     cond1 = cond1.setSource(tab0, tab1)
     leftover0 = cond0 - cond1
     leftover1 = cond1 - cond0
+    commontables = (cond0 | cond1).getTables()
     
     for expr0 in andcond.baseExprs().filter(lambda x: (x.table == tab0)):# & x.isPrimary()):
         for expr1 in andcond.baseExprs().filter(lambda x: (x.table == tab1)):# & x.isPrimary()):
@@ -512,7 +514,11 @@ def identifyTable(cond0, cond1, tab0, tab1, res, other):
                         return False
                     if leftover1 and tab0.leftjoin and not tab1.leftjoin:
                         return False
-                    return leftover0.getTables() <= L(tab0) and leftover1.getTables() <= L(tab0) + other.getTables()
+                    if leftover0.children.filter(lambda x: type(x) is FuncExistsExpr) \
+                        or leftover0.children.filter(lambda x: type(x) is FuncExistsExpr):
+                        return False
+                    return leftover0.getTables() <= commontables and leftover1.getTables() <= commontables
+                    # return leftover0.getTables() <= L(tab0) and leftover1.getTables() <= L(tab0) + other.getTables()
     return False
 
 
@@ -534,6 +540,8 @@ def moveJoins(cond0, cond1, tab0, tab1, res, other):
     leftover0.children = leftover0.children.filter(lambda x: not x.isJoin())
     leftover1 = (cond1 - cond0)
     leftover1.children = leftover1.children.filter(lambda x: not x.isJoin())
+    
+    
     
     @baseFunc
     def addJoins(expr, cond):    

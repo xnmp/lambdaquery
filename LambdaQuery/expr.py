@@ -326,7 +326,7 @@ class AndExpr(Expr):
         if not self.children:
             return "EmptyAndExpr" #or TRUE
         else:
-            return " AND ".join(self.children.fmap(repr))
+            return "(" + " AND ".join(self.children.fmap(repr)) + ")"
     
     def __eq__(self, other):
         return self.children.len() == other.children.len() \

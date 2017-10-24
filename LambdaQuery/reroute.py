@@ -1,5 +1,6 @@
 from LambdaQuery.expr import *
 from LambdaQuery.misc import *
+from LambdaQuery.query import addQuery
 from itertools import product
 
 def addParents(self, reset=False, debug=False):
@@ -147,7 +148,7 @@ def moveInHaving(inner, outer, debug=False):
     
     for outexpr in outer.joincond.children.filter(lambda x: x.getTables() <= (inner.getTables() + L(inner))
                                                and not x.isagg() # and x.getTables()[0] == inner 
-                                               and x.getRef(oldtables=L(inner)).isagg()
+                                               and x.getRef().isagg()
                                                ):
         
         havingexpr = outexpr.getRef(oldtables=L(inner))
@@ -163,10 +164,10 @@ def moveInHaving(inner, outer, debug=False):
         
         # get rid of references that were only there to provide for the aggregate joincond (broken)
         # if delete:
-        for key, inexpr in inner.columns.items():
-            # if the expr doesn't get refered to by the outer table
-            if inexpr in havingexpr.descendants() and not outer.allDescendants().filter(lambda x: x.getRef() == inexpr).exists():
-                del inner.columns[key]
+        # for key, inexpr in inner.columns.items():
+        #     # if the expr doesn't get refered to by the outer table
+        #     if inexpr in havingexpr.descendants() and not inner.parents.bind(lambda x: x.allDescendants()).filter(lambda x: x.getRef() == inexpr).exists():
+        #         del inner.columns[key]
 
 
 def moveInAll(inner, outer, debug=False):
@@ -438,9 +439,11 @@ def canMergeTable(tab0, tab1, subquery=False):
               (tab0.groupbys == tab1.groupbys and not isSum(tab0) and not isSum(tab1))
               # or ((isSum(tab0) or isSum(tab1)) and (not tab0.isagg() or not tab1.isagg()) and tab0.groupbys == tab1.groupbys)
     # hi &= (subquery or tab0.columns.values().filter(lambda x: not x.isagg() and not x.isPrimary()).notExists())
+    
     return hi and not tab1.joincond.children.filter(lambda x: isInvalid(x, isjc=True)) \
               and not tab0.joincond.children.filter(lambda x: isInvalid(x, isjc=True)) \
               and tab1.limitvar == tab0.limitvar and tab1.ordervar == tab0.ordervar
+              # and not (not subquery and not tab0.isagg())
 
 
 def mergeGrouped(self, debug=False, subquery=False):
@@ -469,20 +472,31 @@ def mergeGrouped(self, debug=False, subquery=False):
     
     for tablegroup in alltablegroups:
         
-        merged = tablegroup.fold(lambda x, y: x @ y)
-        self.setSource(merged, oldtable=tablegroup)
+        # if self in tablegroup, then use the columns = 'left' option in addquery. 
+        # then modify columns ith mergeexpr
         
         if self in tablegroup:
-            moveInHaving(inner=merged, outer=self)
-            
-            # merge with a subquery and convert the agg exprs
+            merged = tablegroup.fold(lambda x, y: addQuery(x, y, addcols='left'))
             merged.modify(lambda x: mergeExpr(x, oldtables=tablegroup))
-            self.modify(lambda x: mergeExpr(x, oldtables=L(merged)))
-            merged.columns = self.columns
             self.__dict__.update(merged.__dict__)
-            break
+        else:
+            merged = tablegroup.fold(lambda x, y: x @ y)
+            self.setSource(merged, oldtable=tablegroup)
+        
+        # if self not in tablegroup:
+        
+        # if self in tablegroup:
+            
+        #     # moveInHaving(inner=table, outer=self)
+            
+        #     # merge with a subquery and convert the agg exprs
+        #     merged.modify(lambda x: mergeExpr(x, oldtables=tablegroup))
+        #     # self.modify(lambda x: mergeExpr(x, oldtables=L(merged)))
+        #     # merged.columns = self.columns
+        #     self.__dict__.update(merged.__dict__)
+        #     break
     
-    if alltablegroups:
+    if alltablegroups and self.subQueries():
         mergeGrouped(self)
     
     # for subtable in self.subQueries():
@@ -490,6 +504,9 @@ def mergeGrouped(self, debug=False, subquery=False):
 
 def mergeExpr(expr, oldtables):
     res = expr.getRef(oldtables=oldtables)
+    
+    
+    
     # if AndExpr(expr.baseExprs().filter(lambda x: x.table.leftjoin).fmap(Expr._isnull_)).children:        
     return res
 

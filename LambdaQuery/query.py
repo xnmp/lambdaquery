@@ -514,9 +514,13 @@ def identifyTable(cond0, cond1, tab0, tab1, res, other):
                         return False
                     if leftover1 and tab0.leftjoin and not tab1.leftjoin:
                         return False
-                    if leftover0.children.filter(lambda x: type(x) is FuncExistsExpr) \
-                        or leftover0.children.filter(lambda x: type(x) is FuncExistsExpr):
+                    # if leftover0.children.filter(lambda x: type(x) is FuncExistsExpr) \
+                    #     or leftover0.children.filter(lambda x: type(x) is FuncExistsExpr):
+                    #     return False
+                    
+                    if tab0.derivatives != tab1.derivatives:
                         return False
+                    
                     return leftover0.getTables() <= commontables and leftover1.getTables() <= commontables
                     # return leftover0.getTables() <= L(tab0) and leftover1.getTables() <= L(tab0) + other.getTables()
     return False

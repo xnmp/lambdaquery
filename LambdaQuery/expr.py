@@ -201,8 +201,8 @@ class Expr(object):
         # only used for deciding what to group by in the having
         if not self.isagg():
             return L(self)
-        return self.children.filter(lambda x: not x.isagg() and type(x) is not ConstExpr) \
-             + self.children.filter(lambda x: x.isagg() and type(x) is not AggExpr).bind(Expr.havingGroups)
+        return self.children.filter(lambda x: type(x) is BaseExpr and not x.isnotmove() and type(x) is not ConstExpr) \
+             + self.children.filter(lambda x: x.isnotmove() and type(x) is not AggExpr and type(x) is not WindowExpr).bind(Expr.havingGroups)
     
     def modify(self, mfunc):
         reschildren = copy(self.children)
@@ -232,6 +232,9 @@ class Expr(object):
     
     def isagg(self):
         return self.children.filter(lambda x: x.isagg()).any()
+    
+    def isnotmove(self):
+        return self.isagg() or self.iswindow()
     
     def iswindow(self):
         return self.children.filter(lambda x: x.iswindow()).any()

@@ -12,6 +12,8 @@ class Query(Table, Monad):
         self.leftjoin = leftjoin
     
     def __repr__(self):
+        if hasattr(self, 'data'):
+            return self.data.head()
         return f"Query(columns= {self.columns}, \n      joincond= {self.joincond}, \n      groupbys= {self.groupbys}, \n      memloc= '{memloc(self)}')"
     
     def __rshift__(self, func):
@@ -125,7 +127,13 @@ class Query(Table, Monad):
         return self.allExprs().getTables()
     
     def isagg(self):
-        return (self.columns.values() + self.joincond).filter(lambda x: x.isagg()).any()
+        return (self.columns.values() + self.joincond).any(lambda x: x.isagg())
+    
+    def aggedTables(self):
+        return self.allDescendants().filter(lambda x: isinstance(x, AggExpr)).getTables()
+    
+    def iswindow(self):
+        return self.columns.values().any(lambda x: x.iswindow())
     
     def isOuter(self):
         return self.subQueries().exists()
@@ -169,6 +177,9 @@ class Query(Table, Monad):
         
         return res
     
+    def baseTables(self):
+        return self.groupbys.getTables().bind(lambda x: L(x) + x.derivatives)
+    
     def queryTables(self):
         return (self.columns.getTables() + self.groupbys.getTables()).bind(lambda x: L(x) + x.derivatives)
     
@@ -194,10 +205,10 @@ class Query(Table, Monad):
     
     # %% ^━━━━━━━━━━━━━━ PUBLIC FUNCTIONS ━━━━━━━━━━━━━━━^
     
-    def aggregate(self, aggfunc=None, iswindow=False, existsq=False, lj=True, distinct=False):
+    def aggregate(self, aggfunc=None, iswindow=False, existsq=False, lj=True, distinct=False, ungroup=True):
         # Aggregate a query into a single row
         if aggfunc is not None:
-            return self.fmap(aggfunc).aggregate()
+            return self.fmap(aggfunc).aggregate(ungroup=ungroup)
         res = Columns()
         newsource = copy(self)
         for key, expr in newsource.columns.items():
@@ -207,7 +218,7 @@ class Query(Table, Monad):
             del newsource.columns[key]
             newsource.columns[dummylabel] = expr
             # SUPER IMPORTANT POINT: REMOVE A GROUP BY HERE
-            newsource.ungroupby()
+            if ungroup: newsource.ungroupby()
         
         if len(res) == 1 and not newsource.groupbys and not res.values().filter(lambda x: type(x.getRef()) is WindowExpr):
             newsource = deepcopy(newsource)
@@ -403,9 +414,9 @@ class Query(Table, Monad):
         for tab in ljtables:
             tab.leftjoin = True
         
-        res.modify(lambda x: x.setWhere(False) if x.getTables() ^ ljtables else x, 'joincond')
+        res.modify(lambda x: x.setWhere(False) if x.getTables() ^ ljtables and not x.isExist() else x, 'joincond')
         for subq in res.subQueries():
-            subq.modify(lambda x: x.setWhere(False) if x.getTables() ^ ljtables else x, 'joincond')
+            subq.modify(lambda x: x.setWhere(False) if x.getTables() ^ ljtables and not x.isExist() else x, 'joincond')
         
         # res.modify(lambda x: x.setWhere(False), 'joincond')
         # ifcond = res.joincond.children.filter(lambda x: x.getTables() <= res.dependents())
@@ -413,7 +424,8 @@ class Query(Table, Monad):
         # tricky part with dependent tables
         # if ifcond:
         
-        depts = res.dependents().filter(lambda x: x in res.getTables())
+        depts = res.dependents().filter(lambda x: x in res.getTables())\
+            .filter(lambda x: not self.joincond.children.filter(lambda y: y.iswhere and x in y.getTables()))
         if depts:
             notnullcond = depts.fmap(lambda x: Expr._notnull_(x.primaryExpr()))
             for key, expr in self.columns.items():
@@ -496,8 +508,9 @@ def identifyTable(cond0, cond1, tab0, tab1, res, other):
     # tab1 and tab0 are both joined to the same table by the same thing
     # the extras are just where conds
     
-    # cond0 = res.joincond._filter(tab0, other.joincond.getTables())
-    # cond1 = other.joincond._filter(tab1, res.joincond.getTables())
+    # jtables = res.joincond.getTables() & other.joincond.getTables()
+    # cond0 = res.joincond._filter(tab0, jtables)
+    # cond1 = other.joincond._filter(tab1, jtables)
     
     andcond = cond0 & cond1
     

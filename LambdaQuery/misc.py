@@ -169,7 +169,9 @@ class L(list):
         if self:
             list.pop(self)
     
-    def any(self):
+    def any(self, cond=None):
+        if cond:
+            self = self.filter(cond)
         return any(self)
         # return self.fold(self[0].__class__.__or__)
     

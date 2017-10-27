@@ -75,21 +75,23 @@ def lastSeparator(self):
     return '\n' if len(self.split('\n  ')[-1]) > 200 else ''
 
 
-def getGroupbys(self, havings=None, reduce=False, subquery=False, debug=False):
+def getGroupbys(self, havings=None, windows=None, reduce=False, subquery=False, debug=False):
     exprs = self.columns.values()
     if (reduce or subquery) and self.isagg() and not exprs.fmap(lambda x: x.isagg()).all():
-        groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg() and not isinstance(x, WindowExpr)).len() + 1))
+        groupbys = L(*range(1, exprs.filter(lambda x: not x.isagg() and not x.iswindow()).len() + 1))
         groupbys += havings.bind(Expr.havingGroups).filter(lambda x: x not in exprs)
-        if subquery and not debug:
+        # if subquery and not debug:
             # don't include the groupbys if the outermost query is an aggregate, 
             # because we're cheating with functions like count_
-            groupbys += self.groupbys.filter(lambda x: x not in exprs)
+        groupbys += self.groupbys.filter(lambda x: x not in exprs)
     elif self.isagg() or debug:
         groupbys = self.groupbys
     else:
         return L()
     if groupbys and self.isagg():
         groupbys += self.columns.values().filter(lambda x: isinstance(x, WindowExpr)).bind(lambda x: x.children).filter(lambda x: x not in exprs)
+    if windows and self.isagg():
+        groupbys += windows
     return groupbys
 
 
@@ -115,7 +117,8 @@ def sql(self, display=True, reduce=True, subquery=False, debug=False, correlated
     if wheres: res += f'\nWHERE ' + wheres.intersperse2('\n    AND ')
     
     # ==GROUP BY...
-    groupbys = getGroupbys(self, havings, reduce=reduce, subquery=subquery, debug=debug)
+    windows = self.allDescendants().filter(lambda x: x.iswindow()).bind(lambda x: x.baseExprs())
+    groupbys = getGroupbys(self, havings, windows=windows, reduce=reduce, subquery=subquery, debug=debug)
     if groupbys: res += f'\nGROUP BY ' + groupbys.intersperse(', ')
     
     # ==HAVING...

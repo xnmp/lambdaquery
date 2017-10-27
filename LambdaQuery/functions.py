@@ -143,8 +143,12 @@ def windowfunc(strfunc):
     @wraps(strfunc)
     def qfunc(q0, *args, **kwargs):
         args = L(*args).fmap(lambda x: getattr(q0.columns, x) if type(x) is str else x)
-        return q0.aggregate(lambda x: exprfunc(*args, **kwargs))
+        return q0.aggregate(lambda x: exprfunc(*args, **kwargs), ungroup=False)
     setattr(Query, strfunc.__name__[:-1], qfunc)
+    @wraps(strfunc)
+    def colfunc(col, *args, **kwargs):
+        return qfunc(col.asQuery(), col, *args, **kwargs)
+    setattr(Columns, strfunc.__name__, colfunc)
     return exprfunc
 
 
@@ -419,14 +423,23 @@ def rank_(order=None, partitions=None):
 @windowfunc
 def first_(expr, *partitions, order):
     parts = ','.join(map(str, partitions))
-    return f'''FIRST_VALUE ({expr}) OVER (PARTITION BY {parts} ORDER BY {orderby} ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)'''
+    return f'''FIRST_VALUE({expr}) OVER (PARTITION BY {parts} ORDER BY {orderby} ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)'''
 @windowfunc
 def last_(expr, *partitions, order):
     parts = ','.join(map(str, partitions))
-    return f'''LAST_VALUE ({expr}) OVER (PARTITION BY {parts} ORDER BY {orderby} ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)'''
+    return f'''LAST_VALUE({expr}) OVER (PARTITION BY {parts} ORDER BY {orderby} ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)'''
 # @windowfunc
 # def zscore_(expr, partitionexpr):    
 #     return f"({expr} - AVG({expr}) OVER (PARTITION BY {partitionexpr})) :: FLOAT / STDDEV({expr}) OVER (PARTITION BY {partitionexpr})"
+@windowfunc
+def lag_(expr, order=None, partitions=None):
+    if partitions and not isinstance(partitions, list):
+        partitions = [partitions]
+    parts = ''
+    if partitions:
+        parts = ','.join(map(str, partitions))
+        parts = f'PARTITION BY {parts} '
+    return f'''LAG({expr}) OVER ({parts}ORDER BY {order})'''
 
 
 
